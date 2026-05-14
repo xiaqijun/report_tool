@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page_title }}</title>
+    <link rel="stylesheet" href="/static/vendor/tabler/css/tabler.min.css">
+    <link rel="stylesheet" href="/static/vendor/tabler-icons/css/tabler-icons.min.css">
+    <link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="{% block body_class %}theme-control-room{% endblock %}" data-bs-theme="light">
+    <div class="page-orbit orbit-left"></div>
+    <div class="page-orbit orbit-right"></div>
+    <div class="page-grid"></div>
+    {% block body %}{% endblock %}
+    <script src="/static/vendor/tabler/js/tabler.min.js"></script>
+</body>
+</html>

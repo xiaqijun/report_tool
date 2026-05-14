@@ -1,0 +1,111 @@
+{% extends "app_shell.html" %}
+
+{% block body_class %}theme-control-room theme-admin{% endblock %}
+
+{% block topbar_title %}基础数据管理{% endblock %}
+
+{% block topbar_copy %}{% endblock %}
+
+{% block page_content %}
+<main class="content-stack content-wide">
+    <section class="section-card table-section merged-data-card">
+        <div class="section-header section-header-tight compact-page-header-row">
+            <h1>{{ dataset.title }}</h1>
+            <div class="page-toolbar">
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#dataset-record-modal">新增</button>
+                <a class="ghost-button btn btn-outline-secondary" href="/static/import-templates/{{ dataset.template_filename }}" download="{{ dataset.template_filename }}">下载模板</a>
+                <form action="/admin/{{ dataset_key }}/import" method="post" enctype="multipart/form-data" class="compact-inline-form import-toolbar-form">
+                    <input class="form-control" type="file" name="import_file" accept=".csv,.xlsx,.xlsm" required>
+                    <button type="submit" class="ghost-button btn btn-outline-secondary">导入数据</button>
+                </form>
+            </div>
+        </div>
+        <div class="data-card-toolbar">
+            <div class="summary-strip table-summary-strip">
+                <article class="summary-chip"><span>记录数</span><strong>{{ total }}</strong></article>
+                <article class="summary-chip"><span>当前页</span><strong>{{ page }} / {{ total_pages }}</strong></article>
+                <article class="summary-chip"><span>搜索词</span><strong>{{ query or '全部' }}</strong></article>
+            </div>
+            <form action="/admin/{{ dataset_key }}" method="get" class="table-search-form">
+                <input class="form-control" type="text" name="q" value="{{ query }}" placeholder="输入关键字搜索">
+                <button type="submit" class="ghost-button btn btn-outline-secondary">搜索</button>
+            </form>
+        </div>
+        <div class="table-responsive">
+        <table class="data-table table table-vcenter">
+            <thead>
+                <tr>
+                    {% for field, label in dataset.columns %}
+                    <th>{{ label }}</th>
+                    {% endfor %}
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for record in records %}
+                <tr>
+                    {% for field, label in dataset.columns %}
+                    <td>{{ record[field] }}</td>
+                    {% endfor %}
+                    <td class="actions-cell">
+                        <a class="link-button btn btn-outline-primary btn-sm" href="/admin/{{ dataset_key }}?q={{ query }}&page={{ page }}&edit_id={{ record.id }}">编辑</a>
+                        <form action="/admin/{{ dataset_key }}/{{ record.id }}/delete" method="post">
+                            <button type="submit" class="danger-button btn btn-danger btn-sm">删除</button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="{{ dataset.columns|length + 1 }}">暂无数据。</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </section>
+
+    <div class="pager-rail">
+        <div class="pager">
+            {% if page > 1 %}<a class="btn btn-outline-secondary" href="/admin/{{ dataset_key }}?q={{ query }}&page={{ page - 1 }}">上一页</a>{% endif %}
+            {% if page < total_pages %}<a class="btn btn-outline-secondary" href="/admin/{{ dataset_key }}?q={{ query }}&page={{ page + 1 }}">下一页</a>{% endif %}
+        </div>
+    </div>
+
+    <div class="modal modal-blur fade {% if editing_record %}show d-block{% endif %}" id="dataset-record-modal" tabindex="-1" {% if editing_record %}aria-modal="true" role="dialog" style="background: rgba(15, 23, 42, 0.45);"{% else %}aria-hidden="true"{% endif %}>
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title h4 mb-0">{% if editing_record %}编辑记录{% else %}新增记录{% endif %}</h2>
+                    {% if editing_record %}
+                    <a href="/admin/{{ dataset_key }}?q={{ query }}&page={{ page }}" class="btn-close" aria-label="关闭"></a>
+                    {% else %}
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+                    {% endif %}
+                </div>
+                <form action="/admin/{{ dataset_key }}/save" method="post">
+                    <input type="hidden" name="record_id" value="{{ editing_record.id if editing_record else '' }}">
+                    <div class="modal-body">
+                        <div class="stack-form">
+                            {% if dataset_key == 'owner-mappings' %}
+                            <label><span>企业项目</span><input class="form-control" type="text" name="enterprise_project" value="{{ editing_record.enterprise_project if editing_record else '' }}" required></label>
+                            <label><span>负责人</span><input class="form-control" type="text" name="owner_name" value="{{ editing_record.owner_name if editing_record else '' }}" required></label>
+                            {% else %}
+                            <label><span>服务器ID</span><input class="form-control" type="text" name="server_id" value="{{ editing_record.server_id if editing_record else '' }}"></label>
+                            <label><span>IP地址</span><input class="form-control" type="text" name="ip_address" value="{{ editing_record.ip_address if editing_record else '' }}"></label>
+                            <label><span>服务器名称</span><input class="form-control" type="text" name="server_name" value="{{ editing_record.server_name if editing_record else '' }}"></label>
+                            {% endif %}
+                            <label><span>备注</span><textarea class="form-control" name="note">{{ editing_record.note if editing_record else '' }}</textarea></label>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        {% if editing_record %}
+                        <a href="/admin/{{ dataset_key }}?q={{ query }}&page={{ page }}" class="link-button btn btn-outline-secondary">取消</a>
+                        {% else %}
+                        <button type="button" class="link-button btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                        {% endif %}
+                        <button type="submit" class="primary-button btn btn-primary">保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</main>
+{% endblock %}

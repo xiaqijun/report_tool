@@ -1,0 +1,97 @@
+{% extends "app_shell.html" %}
+
+{% block body_class %}theme-control-room theme-dashboard{% endblock %}
+
+{% block topbar_title %}资产工作台{% endblock %}
+
+{% block topbar_copy %}{% endblock %}
+
+{% block page_content %}
+<main class="content-stack">
+    <section class="workbench-grid">
+        <section class="section-card upload-stage upload-stage-priority">
+            <div class="section-header section-header-tight">
+                <div>
+                    <p class="eyebrow">主任务</p>
+                    <h2>生成预警清单</h2>
+                </div>
+                <div class="upload-side-note">
+                    <span class="upload-note-label">支持格式</span>
+                    <strong class="badge bg-azure-lt text-azure">CSV / XLSX / XLSM</strong>
+                </div>
+            </div>
+            <form action="/generate" method="post" enctype="multipart/form-data" class="upload-form upload-form-vertical">
+                <label class="dropzone dropzone-strong">
+                    <input class="form-control" type="file" name="asset_file" accept=".csv,.xlsx,.xlsm" required>
+                    <span class="dropzone-title">选择服务器资产总表</span>
+                    <span class="dropzone-copy">建议使用最新资产快照，系统会按当前基础表规则直接生成三份结果。</span>
+                </label>
+                <button type="submit" class="primary-button btn btn-primary">生成三个清单</button>
+            </form>
+            {% if error_message %}
+            <p class="error-message top-gap">{{ error_message }}</p>
+            {% endif %}
+        </section>
+    </section>
+
+    {% if result %}
+    <section class="panel-grid stats-grid">
+        <article class="panel stat-panel card"><span class="metric-eyebrow">结果统计</span><h2>在线未防护</h2><p class="stat-number">{{ result.counts.online_unprotected }}</p></article>
+        <article class="panel stat-panel card"><span class="metric-eyebrow">结果统计</span><h2>Agent 未安装</h2><p class="stat-number">{{ result.counts.agent_missing }}</p></article>
+        <article class="panel stat-panel card"><span class="metric-eyebrow">结果统计</span><h2>防护中断</h2><p class="stat-number">{{ result.counts.protection_interrupted }}</p></article>
+        <article class="panel accent stat-panel card"><span class="metric-eyebrow">预警</span><h2>缺失负责人</h2><p class="stat-number">{{ result.counts.missing_owner }}</p></article>
+    </section>
+
+    <section class="section-card">
+        <div class="section-header">
+            <div>
+                <p class="eyebrow">结果下载</p>
+                <h2>结果文件</h2>
+            </div>
+            <div class="download-links">
+                <a class="link-button btn btn-outline-primary" href="/download/{{ result.batch_code }}/online-unprotected">在线未防护</a>
+                <a class="link-button btn btn-outline-primary" href="/download/{{ result.batch_code }}/agent-missing">未安装</a>
+                <a class="link-button btn btn-outline-primary" href="/download/{{ result.batch_code }}/protection-interrupted">防护中断</a>
+            </div>
+        </div>
+        {% if result.missing_owner_projects %}
+        <p class="tip-text">未匹配负责人项目：{{ result.missing_owner_projects | join('、') }}</p>
+        {% endif %}
+    </section>
+
+    {% for preview_key, preview_label in [("online_unprotected", "Agent在线未添加防护配置主机列表"), ("agent_missing", "Agent未安装主机列表"), ("protection_interrupted", "Agent防护中断主机列表")] %}
+    <section class="section-card table-section">
+        <div class="section-header">
+            <div>
+                <p class="eyebrow">结果预览</p>
+                <h2>{{ preview_label }}</h2>
+            </div>
+            <span class="tip-text">仅预览前 20 行</span>
+        </div>
+        <div class="table-responsive">
+        <table class="data-table table table-vcenter">
+            <thead>
+                <tr>
+                    {% for column in output_columns %}
+                    <th>{{ column }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in result.previews[preview_key] %}
+                <tr>
+                    {% for column in output_columns %}
+                    <td>{{ row[column] }}</td>
+                    {% endfor %}
+                </tr>
+                {% else %}
+                <tr><td colspan="{{ output_columns|length }}">没有符合条件的数据。</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </section>
+    {% endfor %}
+    {% endif %}
+</main>
+{% endblock %}

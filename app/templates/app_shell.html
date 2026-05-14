@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block body %}
+<div class="app-shell">
+    <aside class="app-sidebar">
+        <div class="brand-block">
+            <p class="eyebrow">Asset Ops</p>
+            <h1 class="brand-title">预警控制台</h1>
+        </div>
+
+        <nav class="sidebar-nav">
+            <details class="sidebar-section" {% if request.url.path.startswith('/dashboard') or request.url.path.startswith('/admin/') or request.url.path.startswith('/history') %}open{% endif %}>
+                <summary class="sidebar-section-head {% if request.url.path.startswith('/dashboard') or request.url.path.startswith('/admin/') or request.url.path.startswith('/history') %}active{% endif %}">
+                    <span class="sidebar-section-icon"><i class="ti ti-bell-ringing"></i></span>
+                    <div class="sidebar-section-body">
+                        <strong>主机预警统计输出</strong>
+                    </div>
+                    <span class="sidebar-section-caret"><i class="ti ti-chevron-down"></i></span>
+                </summary>
+
+                <div class="sidebar-subnav">
+                    <a href="/dashboard" class="sidebar-sublink {% if request.url.path.startswith('/dashboard') %}active{% endif %}">
+                        <span class="sidebar-sublink-icon"><i class="ti ti-layout-dashboard"></i></span>
+                        <span class="sidebar-sublink-body">
+                            <strong>工作台</strong>
+                        </span>
+                    </a>
+                    <a href="/admin/owner-mappings" class="sidebar-sublink {% if request.url.path.startswith('/admin/owner-mappings') %}active{% endif %}">
+                        <span class="sidebar-sublink-icon"><i class="ti ti-user-star"></i></span>
+                        <span class="sidebar-sublink-body">
+                            <strong>项目负责人</strong>
+                        </span>
+                    </a>
+                    <a href="/admin/unquota-hosts" class="sidebar-sublink {% if request.url.path.startswith('/admin/unquota-hosts') %}active{% endif %}">
+                        <span class="sidebar-sublink-icon"><i class="ti ti-shield-off"></i></span>
+                        <span class="sidebar-sublink-body">
+                            <strong>未配额主机</strong>
+                        </span>
+                    </a>
+                    <a href="/admin/deferred-install-hosts" class="sidebar-sublink {% if request.url.path.startswith('/admin/deferred-install-hosts') %}active{% endif %}">
+                        <span class="sidebar-sublink-icon"><i class="ti ti-server-off"></i></span>
+                        <span class="sidebar-sublink-body">
+                            <strong>暂不安装主机</strong>
+                        </span>
+                    </a>
+                    <a href="/history" class="sidebar-sublink {% if request.url.path.startswith('/history') %}active{% endif %}">
+                        <span class="sidebar-sublink-icon"><i class="ti ti-history"></i></span>
+                        <span class="sidebar-sublink-body">
+                            <strong>历史记录</strong>
+                        </span>
+                    </a>
+                </div>
+            </details>
+        </nav>
+
+        <div class="sidebar-meta">
+            <span class="sidebar-meta-label">当前环境</span>
+            <strong>本地管理节点</strong>
+        </div>
+    </aside>
+
+    <div class="app-main">
+        <header class="app-topbar">
+            <div class="topbar-main">
+                <p class="eyebrow">Operations Console</p>
+                <div class="topbar-title-row">
+                    <h2 class="topbar-title">{% block topbar_title %}后台管理{% endblock %}</h2>
+                </div>
+                {% set topbar_copy_text %}{% block topbar_copy %}统一管理入口。{% endblock %}{% endset %}
+                {% if topbar_copy_text | trim %}
+                <p class="topbar-copy">{{ topbar_copy_text | trim }}</p>
+                {% endif %}
+            </div>
+            <div class="topbar-actions">
+                <form action="/logout" method="post" class="logout-form">
+                    <button type="submit" class="ghost-button btn btn-outline-secondary">退出</button>
+                </form>
+            </div>
+        </header>
+
+        <div class="app-content">
+            {% block page_content %}{% endblock %}
+        </div>
+    </div>
+</div>
+{% endblock %}

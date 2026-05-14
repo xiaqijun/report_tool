@@ -1,0 +1,73 @@
+{% extends "app_shell.html" %}
+
+{% block body_class %}theme-control-room theme-history{% endblock %}
+
+{% block topbar_title %}历史与归档{% endblock %}
+
+{% block topbar_copy %}{% endblock %}
+
+{% block page_content %}
+<main class="content-stack content-wide">
+    <section class="section-card table-section merged-data-card">
+        <div class="section-header section-header-tight compact-page-header-row">
+            <h1>生成历史</h1>
+            <form action="/history" method="get" class="table-search-form compact-inline-form history-search-form">
+                <input class="form-control" type="text" name="q" value="{{ query }}" placeholder="批次号 / 文件名 / 操作人 / 日期">
+                <button type="submit" class="ghost-button btn btn-outline-secondary">搜索</button>
+            </form>
+        </div>
+        <div class="data-card-toolbar history-data-toolbar">
+            <div class="summary-strip table-summary-strip">
+                <article class="summary-chip"><span>本页记录</span><strong>{{ records|length }}</strong></article>
+                <article class="summary-chip"><span>当前页</span><strong>{{ page }} / {{ total_pages }}</strong></article>
+                <article class="summary-chip"><span>搜索词</span><strong>{{ query or '全部' }}</strong></article>
+            </div>
+        </div>
+        <div class="table-responsive">
+        <table class="data-table table table-vcenter">
+            <thead>
+                <tr>
+                    <th>生成时间</th>
+                    <th>批次号</th>
+                    <th>源文件</th>
+                    <th>操作人</th>
+                    <th>在线未防护</th>
+                    <th>未安装</th>
+                    <th>防护中断</th>
+                    <th>缺失负责人</th>
+                    <th>下载</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for record in records %}
+                <tr>
+                    <td>{{ record.created_at }}</td>
+                    <td>{{ record.batch_code }}</td>
+                    <td>{{ record.source_file_name }}</td>
+                    <td>{{ record.operator_name }}</td>
+                    <td>{{ record.online_unprotected_count }}</td>
+                    <td>{{ record.agent_missing_count }}</td>
+                    <td>{{ record.protection_interrupted_count }}</td>
+                    <td>{{ record.missing_owner_count }}</td>
+                    <td class="actions-cell">
+                        <a class="link-button btn btn-outline-primary btn-sm" href="/download/{{ record.batch_code }}/online-unprotected">在线未防护</a>
+                        <a class="link-button btn btn-outline-primary btn-sm" href="/download/{{ record.batch_code }}/agent-missing">未安装</a>
+                        <a class="link-button btn btn-outline-primary btn-sm" href="/download/{{ record.batch_code }}/protection-interrupted">防护中断</a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="9">暂无历史记录。</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </section>
+
+    <div class="pager-rail">
+        <div class="pager">
+            {% if page > 1 %}<a class="btn btn-outline-secondary" href="/history?q={{ query }}&page={{ page - 1 }}">上一页</a>{% endif %}
+            {% if page < total_pages %}<a class="btn btn-outline-secondary" href="/history?q={{ query }}&page={{ page + 1 }}">下一页</a>{% endif %}
+        </div>
+    </div>
+</main>
+{% endblock %}

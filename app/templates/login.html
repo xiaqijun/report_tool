@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block body_class %}theme-control-room theme-login{% endblock %}
+
+{% block body %}
+<main class="login-shell">
+    <section class="login-stage">
+        <section class="login-card">
+            <div class="login-card-head">
+                <p class="eyebrow">Authorization</p>
+                <div class="signal-pill badge badge-outline text-teal">Admin Entry</div>
+            </div>
+            <h2 class="login-title">进入系统</h2>
+            <p class="login-copy">认证通过后进入统一后台，可直接访问工作台、基础数据管理和历史记录页面。</p>
+            <div class="login-access-strip">
+                <span>工作台</span>
+                <span>规则维护</span>
+                <span>历史记录</span>
+            </div>
+
+            <form action="/login" method="post" class="login-form">
+                <label>
+                    <span>用户名</span>
+                    <input class="form-control" type="text" name="username" value="{{ username or '' }}" placeholder="请输入账号" required>
+                </label>
+                <label>
+                    <span>密码</span>
+                    <input class="form-control" type="password" name="password" placeholder="请输入密码" required>
+                </label>
+                {% if error_message %}
+                <p class="error-message">{{ error_message }}</p>
+                {% endif %}
+                <button type="submit" class="primary-button wide-button btn btn-primary">进入系统</button>
+            </form>
+
+            <div class="login-tip">
+                <strong>初始化账号</strong>
+                <span>admin / Admin@123456</span>
+            </div>
+        </section>
+    </section>
+</main>
+{% endblock %}

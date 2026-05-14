@@ -1,0 +1,27 @@
+[project]
+name = "report-tool"
+version = "0.1.0"
+description = "FastAPI based internal asset reporting tool"
+readme = "项目实施计划.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi==0.115.12",
+    "itsdangerous==2.2.0",
+    "jinja2==3.1.6",
+    "openpyxl==3.1.5",
+    "pymysql==1.1.1",
+    "python-dotenv==1.1.1",
+    "python-multipart==0.0.20",
+    "uvicorn[standard]==0.34.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+[tool.uv]
+package = false
