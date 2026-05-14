@@ -206,6 +206,14 @@ def get_user_by_username(username: str) -> dict[str, object] | None:
         ).fetchone()
 
 
+def update_user_password(user_id: int | str, password: str) -> None:
+    with get_connection() as connection:
+        connection.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (hash_password(password), int(user_id)),
+        )
+
+
 def list_dataset_records(dataset_key: str, search: str = "", page: int = 1, page_size: int = 20) -> tuple[list[dict[str, object]], int]:
     definition = DATASET_DEFINITIONS[dataset_key]
     where_clause = ""

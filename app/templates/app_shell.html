@@ -5,20 +5,21 @@
     <aside class="app-sidebar">
         <div class="brand-block">
             <p class="eyebrow">Asset Ops</p>
-            <h1 class="brand-title">预警控制台</h1>
+            <h1 class="brand-title">报告管理工具</h1>
         </div>
 
         <nav class="sidebar-nav">
-            <div class="sidebar-section sidebar-section-static {% if request.url.path.startswith('/dashboard') or request.url.path.startswith('/admin/') or request.url.path.startswith('/history') %}active{% endif %}">
-                <div class="sidebar-section-head {% if request.url.path.startswith('/dashboard') or request.url.path.startswith('/admin/') or request.url.path.startswith('/history') %}active{% endif %}">
+            {% set section_open = request.url.path.startswith('/dashboard') or request.url.path.startswith('/admin/') or request.url.path.startswith('/history') %}
+            <div class="sidebar-section sidebar-section-static {% if section_open %}active is-open{% endif %}">
+                <button type="button" class="sidebar-section-head {% if section_open %}active{% endif %}" aria-expanded="{{ 'true' if section_open else 'false' }}">
                     <span class="sidebar-section-icon"><i class="ti ti-bell-ringing"></i></span>
                     <div class="sidebar-section-body">
                         <strong>主机预警统计输出</strong>
                     </div>
                     <span class="sidebar-section-caret"><i class="ti ti-chevron-down"></i></span>
-                </div>
+                </button>
 
-                <div class="sidebar-subnav">
+                <div class="sidebar-subnav" {% if not section_open %}hidden{% endif %}>
                     <a href="/dashboard" class="sidebar-sublink {% if request.url.path.startswith('/dashboard') %}active{% endif %}">
                         <span class="sidebar-sublink-icon"><i class="ti ti-layout-dashboard"></i></span>
                         <span class="sidebar-sublink-body">
@@ -88,6 +89,7 @@
                 {% endif %}
             </div>
             <div class="topbar-actions">
+                <a href="/change-password" class="ghost-button btn btn-outline-secondary">修改密码</a>
                 <form action="/logout" method="post" class="logout-form">
                     <button type="submit" class="ghost-button btn btn-outline-secondary">退出</button>
                 </form>
@@ -99,4 +101,20 @@
         </div>
     </div>
 </div>
+<script>
+    document.querySelectorAll('.sidebar-section-head').forEach((toggle) => {
+        toggle.addEventListener('click', () => {
+            const section = toggle.closest('.sidebar-section');
+            const subnav = section?.querySelector('.sidebar-subnav');
+            if (!section || !subnav) {
+                return;
+            }
+
+            const willOpen = toggle.getAttribute('aria-expanded') !== 'true';
+            toggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+            section.classList.toggle('is-open', willOpen);
+            subnav.hidden = !willOpen;
+        });
+    });
+</script>
 {% endblock %}

@@ -24,7 +24,7 @@ async def lifespan(_: FastAPI):
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="内网资产清单工具", lifespan=lifespan)
+    app = FastAPI(title="报告管理工具", lifespan=lifespan)
     app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     app.include_router(auth_router)

@@ -23,7 +23,7 @@ def _pop_version_status(request: Request) -> dict[str, object]:
 
 def _dashboard_context(request: Request, current_user: dict[str, str], result: dict[str, object] | None = None, error_message: str = "") -> dict[str, object]:
     return {
-        "page_title": "内网资产清单工具",
+        "page_title": "报告管理工具",
         "current_user": current_user,
         "result": result,
         "output_columns": OUTPUT_COLUMNS,

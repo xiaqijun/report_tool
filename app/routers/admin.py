@@ -21,7 +21,7 @@ def _pop_version_status(request: Request) -> dict[str, object]:
 
 
 @router.get("/{dataset_key}", response_class=HTMLResponse, response_model=None)
-async def dataset_page(request: Request, dataset_key: str, q: str = "", page: int = 1, edit_id: int | None = None) -> Response:
+async def dataset_page(request: Request, dataset_key: str, q: str = "", page: int = 1, edit_id: int | None = None, create: int = 0) -> Response:
     current_user = require_login(request)
     if isinstance(current_user, RedirectResponse):
         return current_user
@@ -44,6 +44,7 @@ async def dataset_page(request: Request, dataset_key: str, q: str = "", page: in
             "page": page,
             "total": total,
             "total_pages": total_pages,
+            "is_creating": bool(create),
             "editing_record": get_dataset_record(dataset_key, edit_id) if edit_id else None,
             "version_status": _pop_version_status(request),
         },

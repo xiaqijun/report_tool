@@ -759,6 +759,11 @@ h2 {
     color: #9d3718;
 }
 
+.success-message {
+    margin: 0;
+    color: #0f766e;
+}
+
 .dual-grid {
     display: grid;
     grid-template-columns: minmax(320px, 460px) minmax(260px, 1fr);
@@ -1958,6 +1963,7 @@ body {
     position: relative;
     display: grid;
     grid-template-columns: 28px minmax(0, 1fr) 14px;
+    width: 100%;
     align-items: center;
     box-sizing: border-box;
     gap: 10px;
@@ -2015,9 +2021,10 @@ body {
     color: rgba(202, 214, 228, 0.72);
     font-size: 12px;
     transition: transform 160ms ease, color 160ms ease;
+    transform: rotate(-90deg);
 }
 
-.sidebar-section-static .sidebar-section-caret {
+.sidebar-section-static.is-open .sidebar-section-caret {
     transform: rotate(0deg);
 }
 
@@ -2721,6 +2728,24 @@ body {
 
 .login-card {
     border-radius: 20px;
+}
+
+.login-stage {
+    width: min(420px, 100%);
+}
+
+.login-card {
+    padding: 28px;
+}
+
+.login-title {
+    margin: 0;
+    text-align: center;
+    font-size: clamp(24px, 2.6vw, 30px);
+}
+
+.login-form {
+    margin-top: 24px;
 }
 
 @media (max-width: 1080px) {
