@@ -7,12 +7,24 @@ from fastapi.templating import Jinja2Templates
 from app.auth import get_session_user, require_login
 from app.db import get_result_history, list_result_histories
 from app.services.inventory import OUTPUT_COLUMNS, generate_from_asset_file, persist_upload
+from app.services.system_update import run_update
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
 
 router = APIRouter()
+
+
+def _dashboard_context(current_user: dict[str, str], result: dict[str, object] | None = None, error_message: str = "", update_result: dict[str, object] | None = None) -> dict[str, object]:
+    return {
+        "page_title": "内网资产清单工具",
+        "current_user": current_user,
+        "result": result,
+        "output_columns": OUTPUT_COLUMNS,
+        "error_message": error_message,
+        "update_result": update_result,
+    }
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -31,13 +43,7 @@ async def dashboard(request: Request) -> Response:
     return templates.TemplateResponse(
         request=request,
         name="dashboard.html",
-        context={
-            "page_title": "内网资产清单工具",
-            "current_user": current_user,
-            "result": None,
-            "output_columns": OUTPUT_COLUMNS,
-            "error_message": "",
-        },
+        context=_dashboard_context(current_user),
     )
 
 
@@ -57,27 +63,31 @@ async def generate(request: Request, asset_file: UploadFile = File(...)) -> Resp
         return templates.TemplateResponse(
             request=request,
             name="dashboard.html",
-            context={
-                "page_title": "内网资产清单工具",
-                "current_user": current_user,
-                "result": result,
-                "output_columns": OUTPUT_COLUMNS,
-                "error_message": "",
-            },
+            context=_dashboard_context(current_user, result=result),
         )
     except ValueError as error:
         return templates.TemplateResponse(
             request=request,
             name="dashboard.html",
-            context={
-                "page_title": "内网资产清单工具",
-                "current_user": current_user,
-                "result": None,
-                "output_columns": OUTPUT_COLUMNS,
-                "error_message": str(error),
-            },
+            context=_dashboard_context(current_user, error_message=str(error)),
             status_code=400,
         )
+
+
+@router.post("/system/update", response_class=HTMLResponse, response_model=None)
+async def update_code(request: Request) -> Response:
+    current_user = require_login(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+
+    update_result = run_update()
+    status_code = 200 if bool(update_result["ok"]) else 500
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard.html",
+        context=_dashboard_context(current_user, update_result=update_result),
+        status_code=status_code,
+    )
 
 
 @router.get("/history", response_class=HTMLResponse, response_model=None)

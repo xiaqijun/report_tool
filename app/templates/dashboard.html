@@ -32,6 +32,29 @@
             <p class="error-message top-gap">{{ error_message }}</p>
             {% endif %}
         </section>
+
+        <section class="section-card upload-stage">
+            <div class="section-header section-header-tight">
+                <div>
+                    <p class="eyebrow">维护</p>
+                    <h2>更新部署代码</h2>
+                </div>
+                <div class="upload-side-note">
+                    <span class="upload-note-label">执行步骤</span>
+                    <strong class="badge bg-azure-lt text-azure">git pull + uv sync</strong>
+                </div>
+            </div>
+            <form action="/system/update" method="post" class="upload-form upload-form-vertical">
+                <p class="tip-text">用于部署后拉取最新代码并同步依赖。若进程未自动热重载，更新后仍需手动重启服务。</p>
+                <button type="submit" class="ghost-button btn btn-outline-secondary">更新代码</button>
+            </form>
+            {% if update_result %}
+            <div class="top-gap">
+                <p class="{% if update_result.ok %}tip-text{% else %}error-message{% endif %}">{{ update_result.summary }}</p>
+                <pre class="history-json history-json-compact">{{ update_result.details }}</pre>
+            </div>
+            {% endif %}
+        </section>
     </section>
 
     {% if result %}
