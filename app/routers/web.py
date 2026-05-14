@@ -7,24 +7,35 @@ from fastapi.templating import Jinja2Templates
 from app.auth import get_session_user, require_login
 from app.db import get_result_history, list_result_histories
 from app.services.inventory import OUTPUT_COLUMNS, generate_from_asset_file, persist_upload
-from app.services.system_update import run_update
+from app.services.system_update import check_version, run_update
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
+templates.env.globals["asset_version"] = str(int((BASE_DIR / "app" / "static" / "app.css").stat().st_mtime))
 
 router = APIRouter()
 
 
-def _dashboard_context(current_user: dict[str, str], result: dict[str, object] | None = None, error_message: str = "", update_result: dict[str, object] | None = None) -> dict[str, object]:
+def _pop_version_status(request: Request) -> dict[str, object]:
+    return dict(request.session.pop("version_status", {}))
+
+
+def _dashboard_context(request: Request, current_user: dict[str, str], result: dict[str, object] | None = None, error_message: str = "") -> dict[str, object]:
     return {
         "page_title": "内网资产清单工具",
         "current_user": current_user,
         "result": result,
         "output_columns": OUTPUT_COLUMNS,
         "error_message": error_message,
-        "update_result": update_result,
+        "version_status": _pop_version_status(request),
     }
+
+
+def _normalize_return_to(return_to: str) -> str:
+    if not return_to.startswith("/") or return_to.startswith("//"):
+        return "/dashboard"
+    return return_to
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -43,7 +54,7 @@ async def dashboard(request: Request) -> Response:
     return templates.TemplateResponse(
         request=request,
         name="dashboard.html",
-        context=_dashboard_context(current_user),
+        context=_dashboard_context(request, current_user),
     )
 
 
@@ -63,13 +74,13 @@ async def generate(request: Request, asset_file: UploadFile = File(...)) -> Resp
         return templates.TemplateResponse(
             request=request,
             name="dashboard.html",
-            context=_dashboard_context(current_user, result=result),
+            context=_dashboard_context(request, current_user, result=result),
         )
     except ValueError as error:
         return templates.TemplateResponse(
             request=request,
             name="dashboard.html",
-            context=_dashboard_context(current_user, error_message=str(error)),
+            context=_dashboard_context(request, current_user, error_message=str(error)),
             status_code=400,
         )
 
@@ -80,14 +91,29 @@ async def update_code(request: Request) -> Response:
     if isinstance(current_user, RedirectResponse):
         return current_user
 
+    form = await request.form()
+    return_to = _normalize_return_to(str(form.get("return_to", "/dashboard")))
     update_result = run_update()
-    status_code = 200 if bool(update_result["ok"]) else 500
-    return templates.TemplateResponse(
-        request=request,
-        name="dashboard.html",
-        context=_dashboard_context(current_user, update_result=update_result),
-        status_code=status_code,
-    )
+    update_result["action"] = "update"
+    request.session["version_status"] = update_result
+    return RedirectResponse(url=return_to, status_code=302)
+
+
+@router.post("/system/version-check", response_model=None)
+async def version_check(request: Request) -> Response:
+    current_user = require_login(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+
+    form = await request.form()
+    return_to = _normalize_return_to(str(form.get("return_to", "/dashboard")))
+    version_status = check_version()
+    version_status["action"] = "check"
+    if bool(version_status.get("ok")) and bool(version_status.get("has_update")):
+        version_status = run_update()
+        version_status["action"] = "update"
+    request.session["version_status"] = version_status
+    return RedirectResponse(url=return_to, status_code=302)
 
 
 @router.get("/history", response_class=HTMLResponse, response_model=None)
@@ -108,6 +134,7 @@ async def history_page(request: Request, q: str = "", page: int = 1) -> Response
             "query": q,
             "page": page,
             "total_pages": total_pages,
+            "version_status": _pop_version_status(request),
         },
     )
 

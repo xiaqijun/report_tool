@@ -12,7 +12,12 @@ from app.services.spreadsheets import read_table_file
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
+templates.env.globals["asset_version"] = str(int((BASE_DIR / "app" / "static" / "app.css").stat().st_mtime))
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+def _pop_version_status(request: Request) -> dict[str, object]:
+    return dict(request.session.pop("version_status", {}))
 
 
 @router.get("/{dataset_key}", response_class=HTMLResponse, response_model=None)
@@ -40,6 +45,7 @@ async def dataset_page(request: Request, dataset_key: str, q: str = "", page: in
             "total": total,
             "total_pages": total_pages,
             "editing_record": get_dataset_record(dataset_key, edit_id) if edit_id else None,
+            "version_status": _pop_version_status(request),
         },
     )
 

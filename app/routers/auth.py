@@ -10,6 +10,7 @@ from app.security import verify_password
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
+templates.env.globals["asset_version"] = str(int((BASE_DIR / "app" / "static" / "app.css").stat().st_mtime))
 router = APIRouter()
 
 
