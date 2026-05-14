@@ -5,6 +5,7 @@ description = "FastAPI based internal asset reporting tool"
 readme = "项目实施计划.md"
 requires-python = ">=3.10"
 dependencies = [
+    "cryptography>=45.0.0",
     "fastapi==0.115.12",
     "itsdangerous==2.2.0",
     "jinja2==3.1.6",
