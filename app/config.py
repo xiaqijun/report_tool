@@ -19,6 +19,11 @@ UPLOAD_DIR = DATA_DIR / "uploads"
 IMPORT_DIR = DATA_DIR / "imports"
 EXPORT_DIR = DATA_DIR / "exports"
 
+
+def ensure_runtime_dirs() -> None:
+	for path in (DATA_DIR, UPLOAD_DIR, IMPORT_DIR, EXPORT_DIR):
+		path.mkdir(parents=True, exist_ok=True)
+
 DATABASE_HOST = os.getenv("DATABASE_HOST", "127.0.0.1")
 DATABASE_PORT = int(os.getenv("DATABASE_PORT", "3306"))
 DATABASE_USER = os.getenv("DATABASE_USER", "root")

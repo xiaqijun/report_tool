@@ -2549,6 +2549,13 @@ body {
     justify-content: end;
 }
 
+.toolbar-primary-button {
+    min-height: 34px;
+    padding: 0 12px;
+    font-size: 12px;
+    border-radius: 10px;
+}
+
 .import-toolbar-form {
     display: grid;
     grid-template-columns: minmax(180px, 260px) auto;
@@ -2746,6 +2753,108 @@ body {
 
 .login-form {
     margin-top: 24px;
+}
+
+.theme-admin .section-card.table-section {
+    padding: 16px 18px;
+    border-radius: 18px;
+}
+
+.theme-admin .compact-page-header-row {
+    gap: 12px;
+}
+
+.theme-admin .compact-page-header-row h1 {
+    font-size: clamp(18px, 1.9vw, 24px);
+}
+
+.theme-admin .page-toolbar {
+    gap: 10px;
+}
+
+.theme-admin .page-toolbar .btn,
+.theme-admin .import-toolbar-form button,
+.theme-admin .table-search-form button,
+.theme-admin .pager a,
+.theme-admin .modal-footer .btn {
+    min-height: 36px;
+    padding: 0 14px;
+    font-size: 13px;
+    border-radius: 10px;
+}
+
+.theme-admin .compact-inline-form .form-control,
+.theme-admin .table-search-form .form-control,
+.theme-admin .stack-form .form-control {
+    min-height: 38px;
+    padding: 8px 12px;
+    font-size: 13px;
+    border-radius: 10px;
+}
+
+.theme-admin .stack-form {
+    gap: 14px;
+    margin-top: 18px;
+}
+
+.theme-admin .stack-form textarea.form-control {
+    min-height: 116px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+.theme-admin .data-card-toolbar {
+    gap: 12px;
+}
+
+.theme-admin .summary-strip {
+    gap: 10px;
+}
+
+.theme-admin .summary-chip {
+    min-width: 132px;
+    padding: 10px 12px;
+    gap: 5px;
+    border-radius: 14px;
+}
+
+.theme-admin .summary-chip span {
+    font-size: 10px;
+}
+
+.theme-admin .summary-chip strong {
+    font-size: 14px;
+}
+
+.theme-admin .data-table {
+    margin-top: 12px;
+    border-radius: 16px;
+}
+
+.theme-admin .data-table th,
+.theme-admin .data-table td {
+    padding: 11px 14px;
+}
+
+.theme-admin .data-table th {
+    font-size: 11px;
+}
+
+.theme-admin .data-table td {
+    font-size: 13px;
+}
+
+.theme-admin .modal-content {
+    border-radius: 18px;
+}
+
+.theme-admin .modal-header,
+.theme-admin .modal-footer {
+    padding: 14px 18px;
+}
+
+.theme-admin .modal-body {
+    padding: 18px;
 }
 
 @media (max-width: 1080px) {

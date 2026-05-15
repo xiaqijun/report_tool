@@ -12,7 +12,7 @@
         <div class="section-header section-header-tight compact-page-header-row">
             <h1>{{ dataset.title }}</h1>
             <div class="page-toolbar">
-                <a class="btn btn-primary" href="/admin/{{ dataset_key }}?q={{ query }}&page={{ page }}&create=1">新增</a>
+                <a class="btn btn-primary toolbar-primary-button" href="/admin/{{ dataset_key }}?q={{ query }}&page={{ page }}&create=1">新增</a>
                 <a class="ghost-button btn btn-outline-secondary" href="/static/import-templates/{{ dataset.template_filename }}" download="{{ dataset.template_filename }}">下载模板</a>
                 <form action="/admin/{{ dataset_key }}/import" method="post" enctype="multipart/form-data" class="compact-inline-form import-toolbar-form">
                     <input class="form-control" type="file" name="import_file" accept=".csv,.xlsx,.xlsm" required>
