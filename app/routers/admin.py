@@ -20,6 +20,15 @@ def _pop_version_status(request: Request) -> dict[str, object]:
     return dict(request.session.pop("version_status", {}))
 
 
+def _parse_optional_record_id(record_id: str | None) -> int | None:
+    if record_id is None:
+        return None
+    value = record_id.strip()
+    if not value:
+        return None
+    return int(value)
+
+
 @router.get("/{dataset_key}", response_class=HTMLResponse, response_model=None)
 async def dataset_page(request: Request, dataset_key: str, q: str = "", page: int = 1, edit_id: int | None = None, create: int = 0) -> Response:
     current_user = require_login(request)
@@ -52,12 +61,14 @@ async def dataset_page(request: Request, dataset_key: str, q: str = "", page: in
 
 
 @router.post("/{dataset_key}/save", response_model=None)
-async def save_dataset(request: Request, dataset_key: str, record_id: int | None = Form(None), enterprise_project: str = Form(""), owner_name: str = Form(""), server_id: str = Form(""), ip_address: str = Form(""), server_name: str = Form(""), note: str = Form("")) -> Response:
+async def save_dataset(request: Request, dataset_key: str, record_id: str | None = Form(None), enterprise_project: str = Form(""), owner_name: str = Form(""), server_id: str = Form(""), ip_address: str = Form(""), server_name: str = Form(""), note: str = Form("")) -> Response:
     current_user = require_login(request)
     if isinstance(current_user, RedirectResponse):
         return current_user
     if dataset_key not in DATASET_DEFINITIONS:
         return RedirectResponse(url="/dashboard", status_code=302)
+
+    parsed_record_id = _parse_optional_record_id(record_id)
 
     save_dataset_record(
         dataset_key,
@@ -69,7 +80,7 @@ async def save_dataset(request: Request, dataset_key: str, record_id: int | None
             "server_name": server_name.strip(),
             "note": note.strip(),
         },
-        record_id,
+        parsed_record_id,
     )
     return RedirectResponse(url=f"/admin/{dataset_key}", status_code=302)
 
