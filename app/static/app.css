@@ -22,6 +22,14 @@ html {
     scroll-behavior: smooth;
 }
 
+@media (min-width: 992px) {
+    :root,
+    html {
+        margin-left: 0;
+        margin-right: 0;
+    }
+}
+
 body {
     margin: 0;
     min-height: 100vh;
@@ -2064,18 +2072,19 @@ body {
     border-radius: 2px;
     border: 0;
     background: transparent;
+    outline: none;
     transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
 }
 
 .sidebar-sublink::before {
     content: "";
     position: absolute;
-    left: -5px;
-    top: 50%;
+    left: 0;
+    top: 5px;
     width: 2px;
-    height: 1px;
+    height: calc(100% - 10px);
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.06);
+    background: transparent;
 }
 
 .sidebar-sublink:hover {
@@ -2083,11 +2092,16 @@ body {
     background: rgba(255, 255, 255, 0.015);
 }
 
+.sidebar-sublink:focus-visible {
+    background: rgba(255, 255, 255, 0.03);
+}
+
 .sidebar-sublink.active {
     background: transparent;
 }
 
-.sidebar-sublink.active::before {
+.sidebar-sublink.active::before,
+.sidebar-sublink:focus-visible::before {
     width: 3px;
     background: rgba(94, 234, 212, 0.9);
 }
@@ -2104,6 +2118,7 @@ body {
 }
 
 .sidebar-sublink.active .sidebar-sublink-icon,
+.sidebar-sublink:focus-visible .sidebar-sublink-icon,
 .sidebar-sublink:hover .sidebar-sublink-icon {
     color: #96f5e7;
 }
@@ -2120,6 +2135,7 @@ body {
 }
 
 .sidebar-sublink.active strong,
+.sidebar-sublink:focus-visible strong,
 .sidebar-sublink:hover strong {
     color: #f8fbff;
 }
