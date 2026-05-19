@@ -24,7 +24,7 @@
             </div>
         </div>
         <div class="table-responsive">
-        <table class="data-table table table-vcenter">
+        <table class="data-table table table-vcenter history-table">
             <thead>
                 <tr>
                     <th>生成时间</th>
@@ -42,14 +42,14 @@
                 {% for record in records %}
                 <tr>
                     <td>{{ record.created_at }}</td>
-                    <td>{{ record.batch_code }}</td>
-                    <td>{{ record.source_file_name }}</td>
+                    <td class="history-batch-code">{{ record.batch_code }}</td>
+                    <td class="history-source-file">{{ record.source_file_name }}</td>
                     <td>{{ record.operator_name }}</td>
                     <td>{{ record.online_unprotected_count }}</td>
                     <td>{{ record.agent_missing_count }}</td>
                     <td>{{ record.protection_interrupted_count }}</td>
                     <td>{{ record.missing_owner_count }}</td>
-                    <td class="actions-cell">
+                    <td class="actions-cell history-download-actions">
                         <a class="link-button btn btn-outline-primary btn-sm" href="/download/{{ record.batch_code }}/online-unprotected">在线未防护</a>
                         <a class="link-button btn btn-outline-primary btn-sm" href="/download/{{ record.batch_code }}/agent-missing">未安装</a>
                         <a class="link-button btn btn-outline-primary btn-sm" href="/download/{{ record.batch_code }}/protection-interrupted">防护中断</a>
