@@ -1,3 +1,4 @@
+import json
 import re
 from contextlib import contextmanager
 from datetime import datetime
@@ -171,12 +172,102 @@ def init_db() -> None:
                 missing_owner_projects TEXT,
                 created_at VARCHAR(32) NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS daily_security_reports (
+                id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                report_date VARCHAR(10) NOT NULL UNIQUE,
+                business_stability TEXT NOT NULL,
+                waf_attacks INT NOT NULL DEFAULT 0,
+                waf_blocked INT NOT NULL DEFAULT 0,
+                waf_ips_banned INT NOT NULL DEFAULT 0,
+                cfw_attacks INT NOT NULL DEFAULT 0,
+                cfw_unblocked INT NOT NULL DEFAULT 0,
+                hss_alerts INT NOT NULL DEFAULT 0,
+                ddos_cleanings INT NOT NULL DEFAULT 0,
+                ddos_blackholes INT NOT NULL DEFAULT 0,
+                secmaster_alerts INT NOT NULL DEFAULT 0,
+                trend_comparison TEXT NOT NULL,
+                overall_assessment TEXT NOT NULL,
+                monitor_start VARCHAR(32) NOT NULL DEFAULT '',
+                monitor_end VARCHAR(32) NOT NULL DEFAULT '',
+                waf_detail_attacks INT NOT NULL DEFAULT 0,
+                waf_detail_blocked INT NOT NULL DEFAULT 0,
+                waf_qps_specs VARCHAR(128) NOT NULL DEFAULT '',
+                waf_qps_peak_range VARCHAR(64) NOT NULL DEFAULT '',
+                waf_qps_peak_value INT NOT NULL DEFAULT 0,
+                waf_exceeded_spec TINYINT(1) NOT NULL DEFAULT 0,
+                waf_screenshot_path VARCHAR(255) NOT NULL DEFAULT '',
+                cfw_detail_attacks INT NOT NULL DEFAULT 0,
+                cfw_detail_unblocked INT NOT NULL DEFAULT 0,
+                cfw_bandwidth_spec VARCHAR(128) NOT NULL DEFAULT '',
+                cfw_peak_inbound_range VARCHAR(64) NOT NULL DEFAULT '',
+                cfw_inbound_peak VARCHAR(64) NOT NULL DEFAULT '',
+                cfw_inbound_95th VARCHAR(64) NOT NULL DEFAULT '',
+                cfw_exceeded_spec TINYINT(1) NOT NULL DEFAULT 0,
+                cfw_screenshot_path VARCHAR(255) NOT NULL DEFAULT '',
+                hss_detail_total INT NOT NULL DEFAULT 0,
+                hss_detail_fatal INT NOT NULL DEFAULT 0,
+                hss_detail_high INT NOT NULL DEFAULT 0,
+                hss_detail_medium INT NOT NULL DEFAULT 0,
+                hss_detail_low INT NOT NULL DEFAULT 0,
+                hss_unclosed_event_count INT NOT NULL DEFAULT 0,
+                hss_closed_loop_status VARCHAR(256) NOT NULL DEFAULT '',
+                hss_screenshot_path VARCHAR(255) NOT NULL DEFAULT '',
+                ddos_detail_cleanings INT NOT NULL DEFAULT 0,
+                ddos_detail_blackholes INT NOT NULL DEFAULT 0,
+                ddos_screenshot_path VARCHAR(255) NOT NULL DEFAULT '',
+                secmaster_detail_total INT NOT NULL DEFAULT 0,
+                secmaster_detail_fatal INT NOT NULL DEFAULT 0,
+                secmaster_detail_high INT NOT NULL DEFAULT 0,
+                secmaster_detail_medium INT NOT NULL DEFAULT 0,
+                secmaster_detail_low INT NOT NULL DEFAULT 0,
+                secmaster_detail_info INT NOT NULL DEFAULT 0,
+                secmaster_unclosed_event_count INT NOT NULL DEFAULT 0,
+                secmaster_screenshot_path VARCHAR(255) NOT NULL DEFAULT '',
+                emergency_response_screenshot_path VARCHAR(255) NOT NULL DEFAULT '',
+                attack_path_screenshot_path VARCHAR(255) NOT NULL DEFAULT '',
+                key_work_screenshot_path VARCHAR(255) NOT NULL DEFAULT '',
+                emergency_response TEXT NOT NULL,
+                attack_path_assessment TEXT NOT NULL,
+                key_work_content TEXT NOT NULL,
+                operator_name VARCHAR(255) NOT NULL,
+                created_at VARCHAR(32) NOT NULL,
+                updated_at VARCHAR(32) NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS ops_personnel (
+                id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                name VARCHAR(64) NOT NULL,
+                phone VARCHAR(32) NOT NULL DEFAULT '',
+                role VARCHAR(128) NOT NULL DEFAULT '',
+                responsibility VARCHAR(256) NOT NULL DEFAULT '',
+                sort_order INT NOT NULL DEFAULT 0,
+                created_at VARCHAR(32) NOT NULL,
+                updated_at VARCHAR(32) NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS app_settings (
+                id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                setting_key VARCHAR(128) NOT NULL UNIQUE,
+                setting_value LONGTEXT NOT NULL,
+                updated_at VARCHAR(32) NOT NULL
+            );
             """
         )
         _ensure_column(connection, "result_histories", "online_unprotected_path", "TEXT NULL")
         _ensure_column(connection, "result_histories", "agent_missing_path", "TEXT NULL")
         _ensure_column(connection, "result_histories", "protection_interrupted_path", "TEXT NULL")
         _ensure_column(connection, "result_histories", "missing_owner_projects", "TEXT NULL")
+        _ensure_column(connection, "daily_security_reports", "hss_unclosed_event_count", "INT NOT NULL DEFAULT 0")
+        _ensure_column(connection, "daily_security_reports", "secmaster_unclosed_event_count", "INT NOT NULL DEFAULT 0")
+        _ensure_column(connection, "daily_security_reports", "waf_screenshot_path", "VARCHAR(255) NOT NULL DEFAULT ''")
+        _ensure_column(connection, "daily_security_reports", "cfw_screenshot_path", "VARCHAR(255) NOT NULL DEFAULT ''")
+        _ensure_column(connection, "daily_security_reports", "hss_screenshot_path", "VARCHAR(255) NOT NULL DEFAULT ''")
+        _ensure_column(connection, "daily_security_reports", "ddos_screenshot_path", "VARCHAR(255) NOT NULL DEFAULT ''")
+        _ensure_column(connection, "daily_security_reports", "secmaster_screenshot_path", "VARCHAR(255) NOT NULL DEFAULT ''")
+        _ensure_column(connection, "daily_security_reports", "emergency_response_screenshot_path", "VARCHAR(255) NOT NULL DEFAULT ''")
+        _ensure_column(connection, "daily_security_reports", "attack_path_screenshot_path", "VARCHAR(255) NOT NULL DEFAULT ''")
+        _ensure_column(connection, "daily_security_reports", "key_work_screenshot_path", "VARCHAR(255) NOT NULL DEFAULT ''")
 
 
 def ensure_default_admin(username: str, password: str) -> None:
@@ -479,3 +570,146 @@ def build_match_key(server_id: str, ip_address: str, server_name: str) -> str:
     if ip_address.strip():
         return f"ip:{ip_address.strip().lower()}"
     return f"name:{server_name.strip().lower()}"
+
+
+# --- Daily Security Report CRUD ---
+
+
+def get_daily_report_by_date(report_date: str) -> dict[str, object] | None:
+    with get_connection() as connection:
+        return connection.execute(
+            "SELECT * FROM daily_security_reports WHERE report_date = ?",
+            (report_date,),
+        ).fetchone()
+
+
+def save_daily_report(report_date: str, payload: dict[str, object], operator_name: str) -> None:
+    now = datetime.now().isoformat(timespec="seconds")
+    existing = get_daily_report_by_date(report_date)
+
+    fields = [
+        "business_stability", "waf_attacks", "waf_blocked", "waf_ips_banned",
+        "cfw_attacks", "cfw_unblocked", "hss_alerts", "ddos_cleanings",
+        "ddos_blackholes", "secmaster_alerts", "trend_comparison", "overall_assessment",
+        "monitor_start", "monitor_end",
+        "waf_detail_attacks", "waf_detail_blocked", "waf_qps_specs",
+        "waf_qps_peak_range", "waf_qps_peak_value", "waf_exceeded_spec", "waf_screenshot_path",
+        "cfw_detail_attacks", "cfw_detail_unblocked", "cfw_bandwidth_spec",
+        "cfw_peak_inbound_range", "cfw_inbound_peak", "cfw_inbound_95th", "cfw_exceeded_spec", "cfw_screenshot_path",
+        "hss_detail_total", "hss_detail_fatal", "hss_detail_high",
+        "hss_detail_medium", "hss_detail_low", "hss_unclosed_event_count", "hss_closed_loop_status", "hss_screenshot_path",
+        "ddos_detail_cleanings", "ddos_detail_blackholes", "ddos_screenshot_path",
+        "secmaster_detail_total", "secmaster_detail_fatal", "secmaster_detail_high",
+        "secmaster_detail_medium", "secmaster_detail_low", "secmaster_detail_info", "secmaster_unclosed_event_count", "secmaster_screenshot_path",
+        "emergency_response", "emergency_response_screenshot_path", "attack_path_assessment", "attack_path_screenshot_path", "key_work_content", "key_work_screenshot_path",
+    ]
+
+    with get_connection() as connection:
+        if existing:
+            set_clause = ", ".join(f"{f} = ?" for f in fields)
+            values = [payload.get(f, "") for f in fields] + [now, existing["id"]]
+            connection.execute(
+                f"UPDATE daily_security_reports SET {set_clause}, updated_at = ? WHERE id = ?",
+                tuple(values),
+            )
+        else:
+            placeholders = ", ".join("?" for _ in fields)
+            values = [payload.get(f, "") for f in fields] + [operator_name, now, now]
+            connection.execute(
+                f"INSERT INTO daily_security_reports (report_date, {', '.join(fields)}, operator_name, created_at, updated_at) VALUES (?, {placeholders}, ?, ?, ?)",
+                tuple([report_date] + values),
+            )
+
+
+def get_previous_report(report_date: str) -> dict[str, object] | None:
+    with get_connection() as connection:
+        return connection.execute(
+            "SELECT * FROM daily_security_reports WHERE report_date < ? ORDER BY report_date DESC LIMIT 1",
+            (report_date,),
+        ).fetchone()
+
+
+# --- Ops Personnel CRUD ---
+
+
+def list_ops_personnel() -> list[dict[str, object]]:
+    with get_connection() as connection:
+        return connection.execute(
+            "SELECT * FROM ops_personnel ORDER BY sort_order ASC, id ASC"
+        ).fetchall()
+
+
+def get_ops_personnel(record_id: int) -> dict[str, object] | None:
+    with get_connection() as connection:
+        return connection.execute(
+            "SELECT * FROM ops_personnel WHERE id = ?", (record_id,)
+        ).fetchone()
+
+
+def save_ops_personnel(payload: dict[str, str], record_id: int | None = None) -> None:
+    now = datetime.now().isoformat(timespec="seconds")
+    with get_connection() as connection:
+        if record_id is not None:
+            connection.execute(
+                "UPDATE ops_personnel SET name = ?, phone = ?, role = ?, responsibility = ?, sort_order = ?, updated_at = ? WHERE id = ?",
+                (payload.get("name", ""), payload.get("phone", ""), payload.get("role", ""),
+                 payload.get("responsibility", ""), int(payload.get("sort_order", 0)), now, record_id),
+            )
+        else:
+            connection.execute(
+                "INSERT INTO ops_personnel (name, phone, role, responsibility, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (payload.get("name", ""), payload.get("phone", ""), payload.get("role", ""),
+                 payload.get("responsibility", ""), int(payload.get("sort_order", 0)), now, now),
+            )
+
+
+def delete_ops_personnel(record_id: int) -> None:
+    with get_connection() as connection:
+        connection.execute("DELETE FROM ops_personnel WHERE id = ?", (record_id,))
+
+
+def get_app_setting(setting_key: str) -> str | None:
+    with get_connection() as connection:
+        row = connection.execute(
+            "SELECT setting_value FROM app_settings WHERE setting_key = ?",
+            (setting_key,),
+        ).fetchone()
+    if row is None:
+        return None
+    return str(row.get("setting_value", ""))
+
+
+def save_app_setting(setting_key: str, setting_value: str) -> None:
+    now = datetime.now().isoformat(timespec="seconds")
+    with get_connection() as connection:
+        existing = connection.execute(
+            "SELECT id FROM app_settings WHERE setting_key = ?",
+            (setting_key,),
+        ).fetchone()
+        if existing:
+            connection.execute(
+                "UPDATE app_settings SET setting_value = ?, updated_at = ? WHERE id = ?",
+                (setting_value, now, existing["id"]),
+            )
+            return
+        connection.execute(
+            "INSERT INTO app_settings (setting_key, setting_value, updated_at) VALUES (?, ?, ?)",
+            (setting_key, setting_value, now),
+        )
+
+
+def get_llm_settings() -> dict[str, object] | None:
+    raw_value = get_app_setting("llm_settings")
+    if raw_value is None:
+        return None
+    try:
+        parsed = json.loads(raw_value)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    return parsed
+
+
+def save_llm_settings(payload: dict[str, object]) -> None:
+    save_app_setting("llm_settings", json.dumps(payload, ensure_ascii=False))

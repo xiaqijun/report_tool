@@ -1,0 +1,267 @@
+{% extends "app_shell.html" %}
+
+{% block topbar_title %}日报预览{% endblock %}
+{% block topbar_copy %}预览下载 Word 的实际内容。{% endblock %}
+
+{% block page_content %}
+<main class="content-stack content-wide">
+
+{% if not report %}
+<div class="alert alert-warning" role="alert">
+    今日日报尚未填写，请先在<a href="/daily-report">填写日报</a>中创建。
+</div>
+{% else %}
+
+<div class="section-header section-header-tight">
+    <h1>比亚迪规划院安全运营日报-{{ report_date }}</h1>
+    <div class="page-toolbar">
+        <a href="/daily-report" class="btn btn-outline-secondary">编辑日报</a>
+        <a href="/daily-report/download" class="primary-button btn btn-primary">下载 Word</a>
+    </div>
+</div>
+
+<section class="section-card">
+    <div class="docx-preview-toolbar">
+        <div class="docx-preview-controls" role="group" aria-label="预览缩放模式">
+            <button type="button" class="btn btn-outline-secondary docx-preview-toggle is-active" data-preview-mode="original">100% 原始比例</button>
+            <button type="button" class="btn btn-outline-secondary docx-preview-toggle" data-preview-mode="fit-width">适应宽度</button>
+        </div>
+        <span class="docx-preview-note">当前页面直接渲染下载的 Word 文档。</span>
+        <span id="docx-preview-pagination" class="docx-preview-pagination" hidden></span>
+    </div>
+    <div id="docx-preview-status" class="docx-preview-status">正在加载 Word 预览...</div>
+    <div id="docx-preview-stage" class="docx-preview-stage" hidden>
+        <iframe
+            id="docx-preview-frame"
+            class="docx-preview-frame"
+            title="Word 文档预览"
+            loading="eager"
+        ></iframe>
+    </div>
+</section>
+
+{% endif %}
+
+<div class="form-actions">
+    <a href="/daily-report" class="btn btn-outline-secondary">&larr; 返回编辑</a>
+</div>
+
+</main>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if report %}
+<script src="/static/vendor/jszip/jszip.min.js"></script>
+<script src="/static/vendor/docx-preview/docx-preview.min.js"></script>
+<script>
+    (async () => {
+        const status = document.getElementById('docx-preview-status');
+        const stage = document.getElementById('docx-preview-stage');
+        const frame = document.getElementById('docx-preview-frame');
+        const pagination = document.getElementById('docx-preview-pagination');
+        const modeButtons = Array.from(document.querySelectorAll('.docx-preview-toggle'));
+        const previewState = {
+            mode: 'original',
+            baseWidth: 0,
+            baseHeight: 0,
+            wrapperExtraHeight: 0,
+        };
+
+        const ensureFrameDocument = () => {
+            const frameDocument = frame.contentDocument;
+            frameDocument.open();
+            frameDocument.write(`<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: #e7dfd1;
+        }
+
+        body {
+            padding: 24px;
+        }
+
+        #docx-frame-host {
+            min-height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <div id="docx-frame-host"></div>
+</body>
+</html>`);
+            frameDocument.close();
+            return frameDocument;
+        };
+
+        const applyPreviewStyleCorrections = (frameDocument) => {
+            const existingStyle = frameDocument.getElementById('docx-preview-overrides');
+            if (existingStyle) {
+                existingStyle.remove();
+            }
+
+            const style = frameDocument.createElement('style');
+            style.id = 'docx-preview-overrides';
+            style.textContent = `
+                #docx-frame-host .docx-wrapper {
+                    display: flex !important;
+                    flex-flow: column !important;
+                    align-items: center !important;
+                }
+
+                #docx-frame-host .docx-wrapper > section.docx {
+                    margin-left: auto !important;
+                    margin-right: auto !important;
+                }
+
+                #docx-frame-host article p[style*="text-indent: -36pt"][style*="margin-inline-start: 36pt"] {
+                    text-align: start !important;
+                }
+
+                #docx-frame-host article p[style*="text-indent: 21pt"]:not([style*="text-align"]) {
+                    text-align: justify !important;
+                }
+            `;
+            frameDocument.head.appendChild(style);
+        };
+
+        const syncFrameHeight = () => {
+            const frameDocument = frame.contentDocument;
+            if (!frameDocument) {
+                return;
+            }
+            const wrapper = frameDocument.querySelector('.docx-wrapper');
+            const bodyStyle = frameDocument.body ? frame.contentWindow.getComputedStyle(frameDocument.body) : null;
+            const paddingTop = bodyStyle ? Number.parseFloat(bodyStyle.paddingTop) || 0 : 0;
+            const paddingBottom = bodyStyle ? Number.parseFloat(bodyStyle.paddingBottom) || 0 : 0;
+            const height = wrapper
+                ? Math.ceil(wrapper.getBoundingClientRect().height + paddingTop + paddingBottom)
+                : Math.max(
+                    frameDocument.documentElement.scrollHeight,
+                    frameDocument.body ? frameDocument.body.scrollHeight : 0,
+                );
+            frame.style.height = `${height}px`;
+        };
+
+        const syncFrameHeightOnNextFrame = () => {
+            requestAnimationFrame(() => syncFrameHeight());
+        };
+
+        const setActiveModeButton = (mode) => {
+            modeButtons.forEach((button) => {
+                const isActive = button.dataset.previewMode === mode;
+                button.classList.toggle('is-active', isActive);
+                button.setAttribute('aria-pressed', String(isActive));
+            });
+        };
+
+        const getPreviewNodes = () => {
+            const frameDocument = frame.contentDocument;
+            if (!frameDocument) {
+                return null;
+            }
+            const wrapper = frameDocument.querySelector('.docx-wrapper');
+            const docPage = frameDocument.querySelector('.docx');
+            if (!wrapper || !docPage) {
+                return null;
+            }
+            return { frameDocument, wrapper, docPage };
+        };
+
+        const applyPreviewMode = (mode) => {
+            const nodes = getPreviewNodes();
+            if (!nodes || !previewState.baseWidth || !previewState.baseHeight) {
+                return;
+            }
+
+            const { frameDocument, wrapper, docPage } = nodes;
+            const availableWidth = Math.max(frameDocument.documentElement.clientWidth - 48, previewState.baseWidth);
+            const fitScale = Math.max(0.5, availableWidth / previewState.baseWidth);
+            const scale = mode === 'fit-width' ? fitScale : 1;
+
+            docPage.style.transformOrigin = 'top center';
+            docPage.style.transform = scale === 1 ? '' : `scale(${scale})`;
+            docPage.style.marginLeft = 'auto';
+            docPage.style.marginRight = 'auto';
+            wrapper.style.height = `${Math.ceil(previewState.baseHeight * scale + previewState.wrapperExtraHeight)}px`;
+
+            previewState.mode = mode;
+            setActiveModeButton(mode);
+            syncFrameHeightOnNextFrame();
+        };
+
+        const collectPaginationInfo = () => {
+            const nodes = getPreviewNodes();
+            if (!nodes) {
+                return;
+            }
+            const { frameDocument } = nodes;
+            const renderedPages = frameDocument.querySelectorAll('.docx-wrapper > .docx').length;
+            const explicitPageBreaks = frameDocument.querySelectorAll(
+                '[style*="break-before: page"], [style*="page-break-before"], [style*="break-after: page"], [style*="page-break-after"]'
+            ).length;
+
+            pagination.textContent = `当前预览页数：${renderedPages}，显式分页断点：${explicitPageBreaks}`;
+            pagination.hidden = false;
+        };
+
+        try {
+            const response = await fetch({{ preview_docx_url | tojson }}, { credentials: 'same-origin' });
+            if (!response.ok) {
+                throw new Error('加载失败');
+            }
+
+            const blob = await response.blob();
+            const frameDocument = ensureFrameDocument();
+            const frameHost = frameDocument.getElementById('docx-frame-host');
+
+            await docx.renderAsync(blob, frameHost, frameDocument.head, {
+                className: 'docx',
+                inWrapper: true,
+                breakPages: true,
+                ignoreWidth: false,
+                ignoreHeight: false,
+                ignoreFonts: false,
+                renderHeaders: true,
+                renderFooters: true,
+                renderFootnotes: true,
+                useBase64URL: true,
+            });
+
+            applyPreviewStyleCorrections(frameDocument);
+
+            stage.hidden = false;
+            await new Promise((resolve) => requestAnimationFrame(resolve));
+
+            const nodes = getPreviewNodes();
+            if (nodes) {
+                previewState.baseWidth = nodes.docPage.getBoundingClientRect().width;
+                previewState.baseHeight = nodes.docPage.getBoundingClientRect().height;
+                previewState.wrapperExtraHeight = Math.max(0, nodes.wrapper.getBoundingClientRect().height - previewState.baseHeight);
+                collectPaginationInfo();
+                applyPreviewMode(previewState.mode);
+            }
+
+            if (frame.contentWindow && 'ResizeObserver' in frame.contentWindow) {
+                const observer = new frame.contentWindow.ResizeObserver(() => applyPreviewMode(previewState.mode));
+                observer.observe(frameHost);
+            }
+
+            window.addEventListener('resize', () => applyPreviewMode(previewState.mode));
+            modeButtons.forEach((button) => {
+                button.addEventListener('click', () => applyPreviewMode(button.dataset.previewMode || 'original'));
+            });
+
+            status.hidden = true;
+        } catch (error) {
+            status.textContent = 'Word 预览加载失败，请直接下载文档查看。';
+        }
+    })();
+</script>
+{% endif %}
+{% endblock %}

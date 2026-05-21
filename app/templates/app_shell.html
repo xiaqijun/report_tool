@@ -9,9 +9,10 @@
         </div>
 
         <nav class="sidebar-nav">
-            {% set section_open = request.url.path.startswith('/dashboard') or request.url.path.startswith('/admin/') or request.url.path.startswith('/history') %}
-            <div class="sidebar-section sidebar-section-static {% if section_open %}active is-open{% endif %}">
-                <button type="button" class="sidebar-section-head {% if section_open %}active{% endif %}" aria-expanded="{{ 'true' if section_open else 'false' }}">
+            {% set host_section_open = request.url.path.startswith('/dashboard') or request.url.path.startswith('/admin/') or request.url.path.startswith('/history') %}
+            {% set daily_section_open = request.url.path.startswith('/daily-report') %}
+            <div class="sidebar-section sidebar-section-static {% if host_section_open %}active is-open{% endif %}">
+                <button type="button" class="sidebar-section-head {% if host_section_open %}active{% endif %}" aria-expanded="{{ 'true' if host_section_open else 'false' }}">
                     <span class="sidebar-section-icon"><i class="ti ti-bell-ringing"></i></span>
                     <div class="sidebar-section-body">
                         <strong>主机预警</strong>
@@ -19,7 +20,7 @@
                     <span class="sidebar-section-caret"><i class="ti ti-chevron-down"></i></span>
                 </button>
 
-                <div class="sidebar-subnav" {% if not section_open %}hidden{% endif %}>
+                <div class="sidebar-subnav" {% if not host_section_open %}hidden{% endif %}>
                     <a href="/dashboard" class="sidebar-sublink {% if request.url.path.startswith('/dashboard') %}active{% endif %}">
                         <span class="sidebar-sublink-icon"><i class="ti ti-layout-dashboard"></i></span>
                         <span class="sidebar-sublink-body">
@@ -48,6 +49,42 @@
                         <span class="sidebar-sublink-icon"><i class="ti ti-history"></i></span>
                         <span class="sidebar-sublink-body">
                             <strong>历史记录</strong>
+                        </span>
+                    </a>
+                </div>
+            </div>
+            <div class="sidebar-section sidebar-section-static {% if daily_section_open %}active is-open{% endif %}">
+                <button type="button" class="sidebar-section-head {% if daily_section_open %}active{% endif %}" aria-expanded="{{ 'true' if daily_section_open else 'false' }}">
+                    <span class="sidebar-section-icon"><i class="ti ti-file-description"></i></span>
+                    <div class="sidebar-section-body">
+                        <strong>安全日报</strong>
+                    </div>
+                    <span class="sidebar-section-caret"><i class="ti ti-chevron-down"></i></span>
+                </button>
+
+                <div class="sidebar-subnav" {% if not daily_section_open %}hidden{% endif %}>
+                    <a href="/daily-report" class="sidebar-sublink {% if request.url.path == '/daily-report' %}active{% endif %}">
+                        <span class="sidebar-sublink-icon"><i class="ti ti-edit"></i></span>
+                        <span class="sidebar-sublink-body">
+                            <strong>填写日报</strong>
+                        </span>
+                    </a>
+                    <a href="/daily-report/preview" class="sidebar-sublink {% if request.url.path == '/daily-report/preview' %}active{% endif %}">
+                        <span class="sidebar-sublink-icon"><i class="ti ti-eye"></i></span>
+                        <span class="sidebar-sublink-body">
+                            <strong>预览日报</strong>
+                        </span>
+                    </a>
+                    <a href="/daily-report/operators" class="sidebar-sublink {% if request.url.path.startswith('/daily-report/operators') %}active{% endif %}">
+                        <span class="sidebar-sublink-icon"><i class="ti ti-users"></i></span>
+                        <span class="sidebar-sublink-body">
+                            <strong>运营人员</strong>
+                        </span>
+                    </a>
+                    <a href="/daily-report/llm-settings" class="sidebar-sublink {% if request.url.path.startswith('/daily-report/llm-settings') %}active{% endif %}">
+                        <span class="sidebar-sublink-icon"><i class="ti ti-settings-bolt"></i></span>
+                        <span class="sidebar-sublink-body">
+                            <strong>大模型配置</strong>
                         </span>
                     </a>
                 </div>

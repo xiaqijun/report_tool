@@ -1,0 +1,26 @@
+{% extends 'app_shell.html' %}
+
+{% block content %}
+<h2>导入日报 DOCX</h2>
+
+{% if error_message %}
+<div class="alert alert-danger">{{ error_message }}</div>
+{% endif %}
+
+<form action="/daily-report/import" method="post" enctype="multipart/form-data">
+  <div class="form-group">
+    <label for="file">选择 DOCX 文件</label>
+    <input type="file" class="form-control" id="file" name="file" accept=".docx" required>
+  </div>
+  <div class="form-group">
+    <label for="report_date">报告日期（可选，格式 YYYY-MM-DD）</label>
+    <input type="text" class="form-control" id="report_date" name="report_date" placeholder="例如：2026-05-20">
+  </div>
+  <div class="form-group">
+    <label for="operator">操作人</label>
+    <input type="text" class="form-control" id="operator" name="operator" value="导入者">
+  </div>
+  <button type="submit" class="btn btn-primary">上传并导入</button>
+</form>
+
+{% endblock %}

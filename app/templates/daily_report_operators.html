@@ -1,0 +1,103 @@
+{% extends "app_shell.html" %}
+
+{% block topbar_title %}运营人员管理{% endblock %}
+{% block topbar_copy %}维护日报"五、运营人员"部分的人员信息。{% endblock %}
+
+{% block page_content %}
+<main class="content-stack content-wide">
+
+<div class="section-header section-header-tight compact-page-header-row">
+    <h1>运营人员</h1>
+    <div class="page-toolbar">
+        <a href="/daily-report/operators?create=1" class="btn btn-primary toolbar-primary-button">新增</a>
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table class="data-table table table-vcenter">
+        <thead>
+            <tr>
+                <th>序号</th>
+                <th>姓名</th>
+                <th>联系方式</th>
+                <th>角色</th>
+                <th>工作职责</th>
+                <th class="actions-cell">操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for op in operators %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ op.name }}</td>
+                <td>{{ op.phone }}</td>
+                <td>{{ op.role }}</td>
+                <td>{{ op.responsibility }}</td>
+                <td class="actions-cell">
+                    <a href="/daily-report/operators?edit_id={{ op.id }}" class="btn btn-sm btn-outline-secondary">编辑</a>
+                    <form action="/daily-report/operators/{{ op.id }}/delete" method="post" class="inline-form">
+                        <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('确定要删除 {{ op.name }} 吗？')">删除</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6" class="empty-cell">暂无运营人员记录。</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="form-actions">
+    <a href="/daily-report" class="btn btn-outline-secondary">&larr; 返回日报填写</a>
+</div>
+
+</main>
+
+{# --- Modal for add/edit --- #}
+{% if is_creating or editing_record %}
+<div class="modal modal-blur fade show d-block" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">{% if editing_record %}编辑运营人员{% else %}新增运营人员{% endif %}</h5>
+            </div>
+            <form action="/daily-report/operators/save" method="post">
+                <div class="modal-body">
+                    <input type="hidden" name="record_id" value="{{ editing_record.id if editing_record else '' }}">
+                    <div class="form-grid-2">
+                        <label class="form-field">
+                            <span>姓名</span>
+                            <input class="form-control" type="text" name="name" value="{{ editing_record.name if editing_record else '' }}" required>
+                        </label>
+                        <label class="form-field">
+                            <span>联系方式</span>
+                            <input class="form-control" type="text" name="phone" value="{{ editing_record.phone if editing_record else '' }}">
+                        </label>
+                    </div>
+                    <div class="form-grid-2">
+                        <label class="form-field">
+                            <span>角色</span>
+                            <input class="form-control" type="text" name="role" value="{{ editing_record.role if editing_record else '' }}" placeholder="如：安全运营人员">
+                        </label>
+                        <label class="form-field">
+                            <span>排序</span>
+                            <input class="form-control" type="number" name="sort_order" value="{{ editing_record.sort_order if editing_record else 0 }}">
+                        </label>
+                    </div>
+                    <label class="form-field">
+                        <span>工作职责</span>
+                        <textarea class="form-control" name="responsibility" rows="2">{{ editing_record.responsibility if editing_record else '' }}</textarea>
+                    </label>
+                </div>
+                <div class="modal-footer">
+                    <a href="/daily-report/operators" class="btn btn-outline-secondary">取消</a>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

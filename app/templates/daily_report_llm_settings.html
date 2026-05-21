@@ -1,0 +1,83 @@
+{% extends "app_shell.html" %}
+
+{% block topbar_title %}大模型配置{% endblock %}
+{% block topbar_copy %}配置日报顶部三段自动生成所使用的大模型连接信息。{% endblock %}
+
+{% block page_content %}
+<main class="content-stack content-wide">
+
+<section class="section-card">
+    <div class="section-header section-header-tight compact-page-header-row">
+        <div>
+            <h1>大模型配置</h1>
+            <p class="section-copy">保存后即刻生效；未启用或配置不完整时，系统会自动回退到本地兜底文案。</p>
+        </div>
+    </div>
+
+    {% if llm_settings_saved %}
+    <div class="alert alert-success" role="alert">{{ llm_settings_saved }}</div>
+    {% endif %}
+    {% if error_message %}
+    <div class="alert alert-danger" role="alert">{{ error_message }}</div>
+    {% endif %}
+
+    <div class="form-grid-2">
+        <div class="panel">
+            <p class="eyebrow">当前状态</p>
+            <h2>配置来源：{{ llm_config_source }}</h2>
+            <p class="section-copy">{{ llm_status_text }}</p>
+        </div>
+        <div class="panel">
+            <p class="eyebrow">敏感信息</p>
+            <h2>API Key</h2>
+            <p class="section-copy">当前显示：{{ llm_api_key_masked }}</p>
+            <p class="section-copy">{% if has_stored_llm_settings %}留空将保留数据库中已保存的 Key。{% else %}当前尚未保存数据库配置；如要从页面启用，请重新输入 API Key。{% endif %}</p>
+        </div>
+    </div>
+
+    <form action="/daily-report/llm-settings/save" method="post" class="content-stack">
+        <label class="form-field">
+            <span class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" name="enabled" value="1" {% if llm_settings.enabled %}checked{% endif %}>
+                <span class="form-check-label">启用大模型生成</span>
+            </span>
+        </label>
+
+        <div class="form-grid-2">
+            <label class="form-field">
+                <span class="form-label">API Base URL</span>
+                <input class="form-control" type="text" name="api_base_url" value="{{ llm_settings.api_base_url }}" placeholder="如：https://api.openai.com/v1">
+            </label>
+            <label class="form-field">
+                <span class="form-label">模型名称</span>
+                <input class="form-control" type="text" name="model" value="{{ llm_settings.model }}" placeholder="如：gpt-4.1-mini">
+            </label>
+        </div>
+
+        <div class="form-grid-2">
+            <label class="form-field">
+                <span class="form-label">API Key</span>
+                <input class="form-control" type="password" name="api_key" value="" placeholder="留空则按页面说明处理">
+            </label>
+            <label class="form-field">
+                <span class="form-label">超时时间（秒）</span>
+                <input class="form-control" type="number" min="1" name="timeout_seconds" value="{{ llm_settings.timeout_seconds }}">
+            </label>
+        </div>
+
+        <label class="form-field">
+            <span class="form-check">
+                <input class="form-check-input" type="checkbox" name="clear_api_key" value="1">
+                <span class="form-check-label">清空已保存的 API Key</span>
+            </span>
+        </label>
+
+        <div class="form-actions">
+            <a href="/daily-report" class="btn btn-outline-secondary">返回日报填写</a>
+            <button type="submit" class="btn btn-primary">保存配置</button>
+        </div>
+    </form>
+</section>
+
+</main>
+{% endblock %}

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C \"e:\\\\github\\\\report_tool\" log --oneline -10)",
+      "Bash(uv run python -c ' *)"
+    ]
+  }
+}
