@@ -439,6 +439,7 @@ def _add_waf_detail(doc: Document, report: dict) -> None:
             f"当前WAF产品QPS的规格为{qps_specs}，"
             f"监测到QPS最大值时间段为{peak_range}，峰值为{peak_val}。" + exceeded
         )
+        _add_optional_screenshot(doc, report.get("waf_qps_screenshot_path", ""))
 
 
 def _add_cfw_detail(doc: Document, report: dict) -> None:

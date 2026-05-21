@@ -261,6 +261,7 @@ def init_db() -> None:
         _ensure_column(connection, "daily_security_reports", "hss_unclosed_event_count", "INT NOT NULL DEFAULT 0")
         _ensure_column(connection, "daily_security_reports", "secmaster_unclosed_event_count", "INT NOT NULL DEFAULT 0")
         _ensure_column(connection, "daily_security_reports", "waf_screenshot_path", "VARCHAR(255) NOT NULL DEFAULT ''")
+        _ensure_column(connection, "daily_security_reports", "waf_qps_screenshot_path", "VARCHAR(255) NOT NULL DEFAULT ''")
         _ensure_column(connection, "daily_security_reports", "cfw_screenshot_path", "VARCHAR(255) NOT NULL DEFAULT ''")
         _ensure_column(connection, "daily_security_reports", "hss_screenshot_path", "VARCHAR(255) NOT NULL DEFAULT ''")
         _ensure_column(connection, "daily_security_reports", "ddos_screenshot_path", "VARCHAR(255) NOT NULL DEFAULT ''")
@@ -593,7 +594,7 @@ def save_daily_report(report_date: str, payload: dict[str, object], operator_nam
         "ddos_blackholes", "secmaster_alerts", "trend_comparison", "overall_assessment",
         "monitor_start", "monitor_end",
         "waf_detail_attacks", "waf_detail_blocked", "waf_qps_specs",
-        "waf_qps_peak_range", "waf_qps_peak_value", "waf_exceeded_spec", "waf_screenshot_path",
+        "waf_qps_peak_range", "waf_qps_peak_value", "waf_exceeded_spec", "waf_screenshot_path", "waf_qps_screenshot_path",
         "cfw_detail_attacks", "cfw_detail_unblocked", "cfw_bandwidth_spec",
         "cfw_peak_inbound_range", "cfw_inbound_peak", "cfw_inbound_95th", "cfw_exceeded_spec", "cfw_screenshot_path",
         "hss_detail_total", "hss_detail_fatal", "hss_detail_high",

@@ -153,10 +153,23 @@
                     {% endif %}
                 </div>
                 <div class="paste-zone-hint">
-                    <span class="paste-zone-label">截图（可选）</span>
+                    <span class="paste-zone-label">图1：WAF监测攻击情况（可选）</span>
                     <span class="paste-zone-action">点击、拖拽或 Ctrl+V 粘贴截图</span>
                 </div>
                 <input type="file" class="paste-zone-file" name="waf_screenshot_path" accept="image/png,image/jpeg,image/webp" hidden>
+            </div>
+            <div class="paste-zone" data-section="waf-qps">
+                <input type="hidden" name="waf_qps_screenshot_path_value" value="{{ report.waf_qps_screenshot_path if report else '' }}">
+                <div class="paste-zone-preview" id="preview-waf-qps">
+                    {% if report and report.waf_qps_screenshot_path %}
+                    <img src="/daily-report/screenshots/{{ report_date }}/waf-qps" alt="截图预览">
+                    {% endif %}
+                </div>
+                <div class="paste-zone-hint">
+                    <span class="paste-zone-label">图2：WAF监测QPS趋势（可选）</span>
+                    <span class="paste-zone-action">点击、拖拽或 Ctrl+V 粘贴截图</span>
+                </div>
+                <input type="file" class="paste-zone-file" name="waf_qps_screenshot_path" accept="image/png,image/jpeg,image/webp" hidden>
             </div>
         </div>
 
@@ -245,7 +258,6 @@
                 <span class="form-label">闭环状态</span>
                 <input class="form-control" type="text" name="hss_closed_loop_status" value="{{ report.hss_closed_loop_status if report else '' }}" placeholder="如：无成功入侵事件，已全部闭环。">
             </label>
-            <label class="form-field">
             <div class="paste-zone" data-section="hss">
                 <input type="hidden" name="hss_screenshot_path_value" value="{{ report.hss_screenshot_path if report else '' }}">
                 <div class="paste-zone-preview" id="preview-hss">
@@ -347,20 +359,6 @@
             <label class="form-field">
                 <textarea class="form-control" name="emergency_response" rows="2" placeholder="无。">{{ report.emergency_response if report else '' }}</textarea>
             </label>
-            <label class="form-field">
-            <div class="paste-zone" data-section="emergency-response">
-                <input type="hidden" name="emergency_response_screenshot_path_value" value="{{ report.emergency_response_screenshot_path if report else '' }}">
-                <div class="paste-zone-preview" id="preview-emergency-response">
-                    {% if report and report.emergency_response_screenshot_path %}
-                    <img src="/daily-report/screenshots/{{ report_date }}/emergency-response" alt="截图预览">
-                    {% endif %}
-                </div>
-                <div class="paste-zone-hint">
-                    <span class="paste-zone-label">截图（可选）</span>
-                    <span class="paste-zone-action">点击、拖拽或 Ctrl+V 粘贴截图</span>
-                </div>
-                <input type="file" class="paste-zone-file" name="emergency_response_screenshot_path" accept="image/png,image/jpeg,image/webp" hidden>
-            </div>
         </div>
     </section>
 

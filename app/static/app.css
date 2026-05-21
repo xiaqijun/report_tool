@@ -3181,7 +3181,8 @@ body {
 
 .paste-zone {
     position: relative;
-    min-height: 120px;
+    width: 100%;
+    height: 200px;
     border: 2px dashed var(--bg-deep);
     border-radius: 10px;
     background: rgba(0, 0, 0, 0.015);
@@ -3191,7 +3192,14 @@ body {
     align-items: center;
     justify-content: center;
     overflow: hidden;
-    transition: border-color 0.15s, background 0.15s;
+    margin-bottom: 4px;
+    transition: border-color 0.15s, background 0.15s, height 0.2s;
+    box-sizing: border-box;
+}
+
+.paste-zone.has-image {
+    height: auto;
+    min-height: 200px;
 }
 
 .paste-zone:hover,

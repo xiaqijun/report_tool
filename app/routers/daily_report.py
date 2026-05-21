@@ -34,11 +34,11 @@ router = APIRouter(tags=["daily-report"])
 
 SCREENSHOT_FIELD_TO_SECTION = {
     "waf": "waf_screenshot_path",
+    "waf-qps": "waf_qps_screenshot_path",
     "cfw": "cfw_screenshot_path",
     "hss": "hss_screenshot_path",
     "ddos": "ddos_screenshot_path",
     "secmaster": "secmaster_screenshot_path",
-    "emergency-response": "emergency_response_screenshot_path",
     "attack-path": "attack_path_screenshot_path",
     "key-work": "key_work_screenshot_path",
 }
