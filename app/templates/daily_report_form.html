@@ -145,7 +145,7 @@
                 <input class="form-check-input" type="checkbox" name="waf_exceeded_spec" value="1" {% if report and report.waf_exceeded_spec %}checked{% endif %}>
                 <span class="form-label">超出规格（可能出现限流、随机丢包、自动Bypass等现象）</span>
             </label>
-            <div class="paste-zone" data-section="waf">
+            <div class="paste-zone" tabindex="0" data-section="waf">
                 <input type="hidden" name="waf_screenshot_path_value" value="{{ report.waf_screenshot_path if report else '' }}">
                 <div class="paste-zone-preview" id="preview-waf">
                     {% if report and report.waf_screenshot_path %}
@@ -154,11 +154,11 @@
                 </div>
                 <div class="paste-zone-hint">
                     <span class="paste-zone-label">图1：WAF监测攻击情况（可选）</span>
-                    <span class="paste-zone-action">点击、拖拽或 Ctrl+V 粘贴截图</span>
+                    <span class="paste-zone-action">点击框体获取焦点 → Ctrl+V 粘贴 | 双击选择文件 | 拖拽图片</span>
                 </div>
                 <input type="file" class="paste-zone-file" name="waf_screenshot_path" accept="image/png,image/jpeg,image/webp" hidden>
             </div>
-            <div class="paste-zone" data-section="waf-qps">
+            <div class="paste-zone" tabindex="0" data-section="waf-qps">
                 <input type="hidden" name="waf_qps_screenshot_path_value" value="{{ report.waf_qps_screenshot_path if report else '' }}">
                 <div class="paste-zone-preview" id="preview-waf-qps">
                     {% if report and report.waf_qps_screenshot_path %}
@@ -167,7 +167,7 @@
                 </div>
                 <div class="paste-zone-hint">
                     <span class="paste-zone-label">图2：WAF监测QPS趋势（可选）</span>
-                    <span class="paste-zone-action">点击、拖拽或 Ctrl+V 粘贴截图</span>
+                    <span class="paste-zone-action">点击框体获取焦点 → Ctrl+V 粘贴 | 双击选择文件 | 拖拽图片</span>
                 </div>
                 <input type="file" class="paste-zone-file" name="waf_qps_screenshot_path" accept="image/png,image/jpeg,image/webp" hidden>
             </div>
@@ -210,7 +210,7 @@
                 <input class="form-check-input" type="checkbox" name="cfw_exceeded_spec" value="1" {% if report and report.cfw_exceeded_spec %}checked{% endif %}>
                 <span class="form-label">超出规格（可能出现限流、随机丢包、自动Bypass等现象）</span>
             </label>
-            <div class="paste-zone" data-section="cfw">
+            <div class="paste-zone" tabindex="0" data-section="cfw">
                 <input type="hidden" name="cfw_screenshot_path_value" value="{{ report.cfw_screenshot_path if report else '' }}">
                 <div class="paste-zone-preview" id="preview-cfw">
                     {% if report and report.cfw_screenshot_path %}
@@ -219,7 +219,7 @@
                 </div>
                 <div class="paste-zone-hint">
                     <span class="paste-zone-label">截图（可选）</span>
-                    <span class="paste-zone-action">点击、拖拽或 Ctrl+V 粘贴截图</span>
+                    <span class="paste-zone-action">点击框体获取焦点 → Ctrl+V 粘贴 | 双击选择文件 | 拖拽图片</span>
                 </div>
                 <input type="file" class="paste-zone-file" name="cfw_screenshot_path" accept="image/png,image/jpeg,image/webp" hidden>
             </div>
@@ -258,7 +258,7 @@
                 <span class="form-label">闭环状态</span>
                 <input class="form-control" type="text" name="hss_closed_loop_status" value="{{ report.hss_closed_loop_status if report else '' }}" placeholder="如：无成功入侵事件，已全部闭环。">
             </label>
-            <div class="paste-zone" data-section="hss">
+            <div class="paste-zone" tabindex="0" data-section="hss">
                 <input type="hidden" name="hss_screenshot_path_value" value="{{ report.hss_screenshot_path if report else '' }}">
                 <div class="paste-zone-preview" id="preview-hss">
                     {% if report and report.hss_screenshot_path %}
@@ -267,7 +267,7 @@
                 </div>
                 <div class="paste-zone-hint">
                     <span class="paste-zone-label">截图（可选）</span>
-                    <span class="paste-zone-action">点击、拖拽或 Ctrl+V 粘贴截图</span>
+                    <span class="paste-zone-action">点击框体获取焦点 → Ctrl+V 粘贴 | 双击选择文件 | 拖拽图片</span>
                 </div>
                 <input type="file" class="paste-zone-file" name="hss_screenshot_path" accept="image/png,image/jpeg,image/webp" hidden>
             </div>
@@ -287,7 +287,7 @@
                 </label>
             </div>
             <label class="form-field">
-            <div class="paste-zone" data-section="ddos">
+            <div class="paste-zone" tabindex="0" data-section="ddos">
                 <input type="hidden" name="ddos_screenshot_path_value" value="{{ report.ddos_screenshot_path if report else '' }}">
                 <div class="paste-zone-preview" id="preview-ddos">
                     {% if report and report.ddos_screenshot_path %}
@@ -296,7 +296,7 @@
                 </div>
                 <div class="paste-zone-hint">
                     <span class="paste-zone-label">截图（可选）</span>
-                    <span class="paste-zone-action">点击、拖拽或 Ctrl+V 粘贴截图</span>
+                    <span class="paste-zone-action">点击框体获取焦点 → Ctrl+V 粘贴 | 双击选择文件 | 拖拽图片</span>
                 </div>
                 <input type="file" class="paste-zone-file" name="ddos_screenshot_path" accept="image/png,image/jpeg,image/webp" hidden>
             </div>
@@ -338,7 +338,7 @@
                 </label>
             </div>
             <label class="form-field">
-            <div class="paste-zone" data-section="secmaster">
+            <div class="paste-zone" tabindex="0" data-section="secmaster">
                 <input type="hidden" name="secmaster_screenshot_path_value" value="{{ report.secmaster_screenshot_path if report else '' }}">
                 <div class="paste-zone-preview" id="preview-secmaster">
                     {% if report and report.secmaster_screenshot_path %}
@@ -347,7 +347,7 @@
                 </div>
                 <div class="paste-zone-hint">
                     <span class="paste-zone-label">截图（可选）</span>
-                    <span class="paste-zone-action">点击、拖拽或 Ctrl+V 粘贴截图</span>
+                    <span class="paste-zone-action">点击框体获取焦点 → Ctrl+V 粘贴 | 双击选择文件 | 拖拽图片</span>
                 </div>
                 <input type="file" class="paste-zone-file" name="secmaster_screenshot_path" accept="image/png,image/jpeg,image/webp" hidden>
             </div>
@@ -369,7 +369,7 @@
             <textarea class="form-control" name="attack_path_assessment" rows="2" placeholder="暂无">{{ report.attack_path_assessment if report else '暂无' }}</textarea>
         </label>
         <label class="form-field">
-            <div class="paste-zone" data-section="attack-path">
+            <div class="paste-zone" tabindex="0" data-section="attack-path">
                 <input type="hidden" name="attack_path_screenshot_path_value" value="{{ report.attack_path_screenshot_path if report else '' }}">
                 <div class="paste-zone-preview" id="preview-attack-path">
                     {% if report and report.attack_path_screenshot_path %}
@@ -378,7 +378,7 @@
                 </div>
                 <div class="paste-zone-hint">
                     <span class="paste-zone-label">截图（可选）</span>
-                    <span class="paste-zone-action">点击、拖拽或 Ctrl+V 粘贴截图</span>
+                    <span class="paste-zone-action">点击框体获取焦点 → Ctrl+V 粘贴 | 双击选择文件 | 拖拽图片</span>
                 </div>
                 <input type="file" class="paste-zone-file" name="attack_path_screenshot_path" accept="image/png,image/jpeg,image/webp" hidden>
             </div>
@@ -390,7 +390,7 @@
         <label class="form-field">
             <textarea class="form-control" name="key_work_content" rows="3" placeholder="暂无">{{ report.key_work_content if report else '暂无' }}</textarea>
         </label>
-        <div class="paste-zone" data-section="key-work">
+        <div class="paste-zone" tabindex="0" data-section="key-work">
                 <input type="hidden" name="key_work_screenshot_path_value" value="{{ report.key_work_screenshot_path if report else '' }}">
                 <div class="paste-zone-preview" id="preview-key-work">
                     {% if report and report.key_work_screenshot_path %}
@@ -399,7 +399,7 @@
                 </div>
                 <div class="paste-zone-hint">
                     <span class="paste-zone-label">截图（可选）</span>
-                    <span class="paste-zone-action">点击、拖拽或 Ctrl+V 粘贴截图</span>
+                    <span class="paste-zone-action">点击框体获取焦点 → Ctrl+V 粘贴 | 双击选择文件 | 拖拽图片</span>
                 </div>
                 <input type="file" class="paste-zone-file" name="key_work_screenshot_path" accept="image/png,image/jpeg,image/webp" hidden>
             </div>
@@ -509,6 +509,7 @@
         if (!pasteZones.length) return;
 
         const reportDate = '{{ report_date }}';
+        let activeZone = null;
 
         const uploadPastedImage = async (section, blob) => {
             const reader = new FileReader();
@@ -540,108 +541,139 @@
         const showPreview = (zone, src) => {
             const preview = zone.querySelector('.paste-zone-preview');
             if (!preview) return;
-            preview.innerHTML = `<img src="${src}" alt="截图预览">`;
+            preview.innerHTML = '<img src="' + src + '" alt="截图预览">';
             zone.classList.add('has-image');
         };
 
         const setHiddenValue = (zone, path) => {
             const hidden = zone.querySelector('input[type="hidden"]');
             if (hidden) hidden.value = path;
-            // Clear file input so the save endpoint uses the hidden value
             const fileInput = zone.querySelector('.paste-zone-file');
             if (fileInput) fileInput.value = '';
         };
 
         const handleImageBlob = async (zone, section, blob) => {
             try {
-                // Show immediate preview from blob URL
                 showPreview(zone, URL.createObjectURL(blob));
-
-                // Upload to server
                 const result = await uploadPastedImage(section, blob);
                 setHiddenValue(zone, result.path);
             } catch (error) {
-                // Fall back to file input approach: create a File and assign to file input
+                console.error('Paste upload failed, using file fallback:', error);
                 const fileInput = zone.querySelector('.paste-zone-file');
                 if (fileInput) {
-                    const file = new File([blob], `${section}.png`, { type: blob.type || 'image/png' });
+                    const file = new File([blob], section + '.png', { type: blob.type || 'image/png' });
                     const dt = new DataTransfer();
                     dt.items.add(file);
                     fileInput.files = dt.files;
-                    // Clear hidden value so the save endpoint uses the file upload
                     const hidden = zone.querySelector('input[type="hidden"]');
                     if (hidden) hidden.value = '';
-
                     fileInput.dispatchEvent(new Event('change', { bubbles: true }));
                 }
             }
         };
 
-        pasteZones.forEach((zone) => {
-            const section = zone.dataset.section;
-            const fileInput = zone.querySelector('.paste-zone-file');
+        // Track which paste zone is active via focus
+        pasteZones.forEach(function(zone) {
+            zone.addEventListener('focus', function() {
+                activeZone = zone;
+                zone.classList.add('paste-zone-active');
+            });
+            zone.addEventListener('blur', function() {
+                zone.classList.remove('paste-zone-active');
+                // Keep activeZone for paste usage even after blur (short delay)
+                setTimeout(function() {
+                    if (activeZone === zone && document.activeElement !== zone) {
+                        // don't clear - allow paste after blur
+                    }
+                }, 500);
+            });
+        });
 
-            // Click on paste zone triggers file input
-            zone.addEventListener('click', (e) => {
+        // Global paste handler - most reliable
+        document.addEventListener('paste', function(e) {
+            // Try to find paste zone: from focused element, or from last active zone
+            var zone = activeZone;
+
+            // Also walk up from event target
+            if (!zone) {
+                var el = e.target;
+                while (el) {
+                    if (el.classList && el.classList.contains('paste-zone')) {
+                        zone = el;
+                        break;
+                    }
+                    el = el.parentElement;
+                }
+            }
+
+            if (!zone || !zone.dataset.section) return;
+
+            var items = e.clipboardData && e.clipboardData.items;
+            if (!items) return;
+
+            for (var i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image/') === 0) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var blob = items[i].getAsFile();
+                    if (blob) {
+                        handleImageBlob(zone, zone.dataset.section, blob);
+                    }
+                    return;
+                }
+            }
+        });
+
+        pasteZones.forEach(function(zone) {
+            var section = zone.dataset.section;
+            var fileInput = zone.querySelector('.paste-zone-file');
+
+            // Click to focus (for paste); double-click to open file dialog
+            zone.addEventListener('click', function(e) {
                 if (e.target === fileInput) return;
+                zone.focus();
+            });
+            zone.addEventListener('dblclick', function(e) {
                 if (fileInput) fileInput.click();
             });
 
-            // Handle file selection via file input
             if (fileInput) {
-                fileInput.addEventListener('change', () => {
-                    const file = fileInput.files[0];
+                fileInput.addEventListener('change', function() {
+                    var file = fileInput.files[0];
                     if (!file) return;
-                    // Show preview from selected file
                     showPreview(zone, URL.createObjectURL(file));
-                    // Clear hidden value since we're using file upload
-                    const hidden = zone.querySelector('input[type="hidden"]');
+                    var hidden = zone.querySelector('input[type="hidden"]');
                     if (hidden) hidden.value = '';
                 });
             }
 
-            // Handle paste events
-            zone.addEventListener('paste', (e) => {
-                const items = e.clipboardData?.items;
-                if (!items) return;
-
-                for (const item of items) {
-                    if (item.type.startsWith('image/')) {
-                        e.preventDefault();
-                        const blob = item.getAsFile();
-                        handleImageBlob(zone, section, blob);
-                        return;
-                    }
-                }
-            });
-
-            // Handle drag-and-drop
-            zone.addEventListener('dragover', (e) => {
+            // Drag-and-drop
+            zone.addEventListener('dragover', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
                 zone.classList.add('drag-over');
             });
 
-            zone.addEventListener('dragleave', (e) => {
+            zone.addEventListener('dragleave', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
                 zone.classList.remove('drag-over');
             });
 
-            zone.addEventListener('drop', (e) => {
+            zone.addEventListener('drop', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
                 zone.classList.remove('drag-over');
+                zone.focus();
 
-                const files = e.dataTransfer?.files;
+                var files = e.dataTransfer && e.dataTransfer.files;
                 if (!files || !files.length) return;
 
-                const file = files[0];
-                if (file.type.startsWith('image/')) {
+                var file = files[0];
+                if (file.type.indexOf('image/') === 0) {
                     handleImageBlob(zone, section, file);
                 } else if (fileInput) {
-                    // Non-image file: assign to file input
-                    const dt = new DataTransfer();
+                    var dt = new DataTransfer();
                     dt.items.add(file);
                     fileInput.files = dt.files;
                     fileInput.dispatchEvent(new Event('change', { bubbles: true }));

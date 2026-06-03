@@ -3199,27 +3199,35 @@ body {
 
 .paste-zone.has-image {
     height: auto;
-    min-height: 200px;
+    min-height: 60px;
+    overflow: visible;
+    cursor: default;
 }
 
 .paste-zone:hover,
+.paste-zone:focus,
+.paste-zone-active,
 .paste-zone.drag-over {
     border-color: var(--ink-soft);
     background: rgba(0, 0, 0, 0.04);
+    outline: 2px solid var(--ink-soft);
+    outline-offset: 1px;
 }
 
 .paste-zone-preview {
     width: 100%;
-    max-height: 360px;
+    max-height: 100px;
     overflow: hidden;
 }
 
 .paste-zone-preview img {
     display: block;
-    width: 100%;
+    width: auto;
+    max-width: 100%;
     height: auto;
+    max-height: 100px;
     object-fit: contain;
-    max-height: 360px;
+    margin: 0 auto;
 }
 
 .paste-zone.has-image .paste-zone-hint {

@@ -3,6 +3,8 @@ from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
 
+from openpyxl import load_workbook
+
 from app.services import inventory
 
 
@@ -130,3 +132,63 @@ class InventoryGenerationTests(TestCase):
             [row["服务器ID"] for row in result["previews"]["protection_interrupted"]],
             ["srv-1", "srv-2"],
         )
+
+    def test_generated_report_uses_byd_prefix_with_date_and_contains_summary_sheet(self) -> None:
+        rows = [
+            {
+                "服务器名称": "host-a",
+                "服务器ID": "srv-1",
+                "IP地址": "10.0.0.1",
+                "配额ID": "quota-1",
+                "服务器状态": "运行中",
+                "Agent状态": "在线",
+                "风险状态": "高危",
+                "防护状态": "未防护",
+                "操作系统": "Linux",
+                "版本类型": "正式",
+                "企业项目": "项目A",
+                "来源": "CMDB",
+            },
+            {
+                "服务器名称": "host-b",
+                "服务器ID": "srv-2",
+                "IP地址": "10.0.0.2",
+                "配额ID": "quota-2",
+                "服务器状态": "运行中",
+                "Agent状态": "在线",
+                "风险状态": "高危",
+                "防护状态": "未防护",
+                "操作系统": "Linux",
+                "版本类型": "正式",
+                "企业项目": "项目A",
+                "来源": "CMDB",
+            },
+        ]
+
+        with TemporaryDirectory() as temp_dir:
+            export_dir = Path(temp_dir)
+            with (
+                patch.object(inventory, "read_table_file", return_value=rows),
+                patch.object(inventory, "get_owner_mapping_dict", return_value={"项目A": "张三"}),
+                patch.object(inventory, "get_exclusion_match_keys", return_value=set()),
+                patch.object(inventory, "EXPORT_DIR", export_dir),
+                patch.object(inventory, "create_result_history"),
+                patch.object(inventory, "save_import_history"),
+            ):
+                inventory.generate_from_asset_file(export_dir / "asset.xlsx", "系统管理员")
+
+            xlsx_path = next(export_dir.glob("*/*.xlsx"))
+            self.assertRegex(xlsx_path.name, r"^比亚迪Agent在线未添加防护配置主机列表-\d{4}-\d{2}-\d{2}\.xlsx$")
+
+            workbook = load_workbook(xlsx_path)
+            self.assertEqual(workbook.sheetnames, ["汇总", "比亚迪Agent在线未添加防护配置主机列表"])
+            summary_sheet = workbook["汇总"]
+            table_sheet = workbook["比亚迪Agent在线未添加防护配置主机列表"]
+
+            self.assertEqual(summary_sheet["A1"].value, "负责人")
+            self.assertEqual(summary_sheet["B1"].value, "服务器ID计数")
+            self.assertEqual(summary_sheet["A2"].value, "张三")
+            self.assertEqual(summary_sheet["B2"].value, 2)
+            self.assertEqual(summary_sheet["A3"].value, "合计")
+            self.assertEqual(summary_sheet["B3"].value, 2)
+            self.assertEqual(table_sheet["A1"].value, inventory.OUTPUT_COLUMNS[0])

@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
@@ -6,6 +7,8 @@ from app.config import EXPORT_DIR, UPLOAD_DIR
 from app.db import build_match_key, build_match_keys, create_result_history, get_exclusion_match_keys, get_owner_mapping_dict, save_import_history
 from app.services.spreadsheets import read_table_file, write_csv, write_xlsx
 
+
+REPORT_PREFIX = "比亚迪"
 
 OUTPUT_COLUMNS = [
     "服务器名称",
@@ -82,9 +85,24 @@ def generate_from_asset_file(file_path: Path, operator_name: str) -> dict[str, o
     batch_dir = EXPORT_DIR / batch_code
     batch_dir.mkdir(parents=True, exist_ok=True)
 
-    online_path = _write_result_files(batch_dir, f"Agent在线未添加防护配置主机列表-{date_text}", online_unprotected)
-    missing_path = _write_result_files(batch_dir, f"Agent未安装主机列表-{date_text}", agent_missing)
-    interrupted_path = _write_result_files(batch_dir, f"Agent防护中断主机列表-{date_text}", protection_interrupted)
+    online_path = _write_result_files(
+        batch_dir,
+        f"{REPORT_PREFIX}Agent在线未添加防护配置主机列表-{date_text}",
+        online_unprotected,
+        f"{REPORT_PREFIX}Agent在线未添加防护配置主机列表",
+    )
+    missing_path = _write_result_files(
+        batch_dir,
+        f"{REPORT_PREFIX}Agent未安装主机列表-{date_text}",
+        agent_missing,
+        f"{REPORT_PREFIX}Agent未安装主机列表",
+    )
+    interrupted_path = _write_result_files(
+        batch_dir,
+        f"{REPORT_PREFIX}Agent防护中断主机列表-{date_text}",
+        protection_interrupted,
+        f"{REPORT_PREFIX}Agent防护中断主机列表",
+    )
 
     create_result_history(
         batch_code=batch_code,
@@ -153,9 +171,30 @@ def normalize_header(value: str) -> str:
     return value.strip().replace(" ", "").replace("_", "").replace("-", "").lower()
 
 
-def _write_result_files(batch_dir: Path, base_name: str, rows: list[dict[str, str]]) -> dict[str, Path]:
+def _write_result_files(batch_dir: Path, base_name: str, rows: list[dict[str, str]], detail_sheet_name: str) -> dict[str, Path]:
     xlsx_path = batch_dir / f"{base_name}.xlsx"
     csv_path = batch_dir / f"{base_name}.csv"
-    write_xlsx(xlsx_path, OUTPUT_COLUMNS, rows)
+    write_xlsx(
+        xlsx_path,
+        OUTPUT_COLUMNS,
+        rows,
+        summary_rows=_build_summary_rows(rows),
+        detail_sheet_name=detail_sheet_name,
+    )
     write_csv(csv_path, OUTPUT_COLUMNS, rows)
     return {"xlsx": xlsx_path, "csv": csv_path}
+
+
+def _build_summary_rows(rows: Iterable[dict[str, str]]) -> list[dict[str, object]]:
+    owner_counts: dict[str, int] = {}
+    for row in rows:
+        owner = row.get("负责人", "").strip() or "未匹配负责人"
+        owner_counts[owner] = owner_counts.get(owner, 0) + (1 if row.get("服务器ID", "").strip() else 0)
+
+    summary_rows = [
+        {"负责人": owner, "服务器ID计数": count}
+        for owner, count in sorted(owner_counts.items(), key=lambda item: (-item[1], item[0]))
+    ]
+    total_count = sum(item["服务器ID计数"] for item in summary_rows)
+    summary_rows.append({"负责人": "合计", "服务器ID计数": total_count})
+    return summary_rows

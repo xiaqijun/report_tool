@@ -26,9 +26,22 @@ def read_table_file(file_path: Path) -> list[dict[str, str]]:
     raise ValueError("仅支持 csv、xlsx、xlsm 文件。")
 
 
-def write_xlsx(file_path: Path, headers: list[str], rows: list[dict[str, str]]) -> None:
+def write_xlsx(
+    file_path: Path,
+    headers: list[str],
+    rows: list[dict[str, str]],
+    summary_rows: list[dict[str, object]] | None = None,
+    detail_sheet_name: str = "表格",
+) -> None:
     workbook = Workbook()
-    sheet = workbook.active
+    summary_sheet = workbook.active
+    summary_sheet.title = "汇总"
+    summary_headers = ["负责人", "服务器ID计数"]
+    summary_sheet.append(summary_headers)
+    for row in summary_rows or [{"负责人": "合计", "服务器ID计数": 0}]:
+        summary_sheet.append([row.get(header, "") for header in summary_headers])
+
+    sheet = workbook.create_sheet(detail_sheet_name[:31] or "表格")
     sheet.append(headers)
     for row in rows:
         sheet.append([row.get(header, "") for header in headers])
