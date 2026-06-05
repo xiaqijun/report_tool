@@ -15,3 +15,46 @@ data/exports/
 
 .DS_Store
 Thumbs.db
+
+# Claude Code
+.claude/settings.json
+.claude/skills/
+.github/skills/
+AGENTS.md
+
+# Frontend / React build
+frontend/
+app/static/react/
+
+# Backup files
+*.backup.*
+app/static/*.backup.*
+
+# Import templates (with Chinese names)
+app/static/import-templates/*.xlsx
+app/static/import-templates/*.xls
+
+# Temp files (EML, DOCX with Chinese names)
+*.eml
+*.docx
+
+# Python 构建缓存
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# 代码质量工具缓存
+.mypy_cache/
+.ruff_cache/
+.tox/
+
+# 覆盖率报告
+htmlcov/
+.coverage
+coverage.xml
+
+# Node.js
+node_modules/
+package-lock.json
+yarn.lock
