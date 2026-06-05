@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 
 {% block body %}
+<button class="sidebar-toggle" aria-label="切换侧边栏">
+    <i class="ti ti-menu-2"></i>
+</button>
+<div class="sidebar-overlay"></div>
 <div class="app-shell">
     <aside class="app-sidebar">
         <div class="brand-block">
@@ -139,6 +143,7 @@
     </div>
 </div>
 <script>
+    // Sidebar section toggle
     document.querySelectorAll('.sidebar-section-head').forEach((toggle) => {
         toggle.addEventListener('click', () => {
             const section = toggle.closest('.sidebar-section');
@@ -153,5 +158,22 @@
             subnav.hidden = !willOpen;
         });
     });
+
+    // Mobile sidebar toggle
+    const sidebarToggle = document.querySelector('.sidebar-toggle');
+    const sidebar = document.querySelector('.app-sidebar');
+    const sidebarOverlay = document.querySelector('.sidebar-overlay');
+
+    if (sidebarToggle && sidebar && sidebarOverlay) {
+        sidebarToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('is-open');
+            sidebarOverlay.style.display = sidebar.classList.contains('is-open') ? 'block' : 'none';
+        });
+
+        sidebarOverlay.addEventListener('click', () => {
+            sidebar.classList.remove('is-open');
+            sidebarOverlay.style.display = 'none';
+        });
+    }
 </script>
 {% endblock %}

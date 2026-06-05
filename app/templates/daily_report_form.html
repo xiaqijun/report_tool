@@ -13,7 +13,7 @@
 <form action="/daily-report/save" method="post" enctype="multipart/form-data" class="daily-report-form">
 
     {# --- Section 1: 总体安全态势 --- #}
-    <section class="section-card">
+    <div>
         <h2 class="section-card-title">一、总体安全态势</h2>
 
         <div class="form-actions form-actions-compact daily-report-ai-actions">
@@ -92,10 +92,10 @@
             </span>
             <textarea class="form-control" name="overall_assessment" rows="2" placeholder="如：总体来看，整体安全态势保持平稳可控。">{{ report.overall_assessment if report else '' }}</textarea>
         </label>
-    </section>
+    </div>
 
     {# --- Section 2: 安全监控 --- #}
-    <section class="section-card">
+    <div>
         <h2 class="section-card-title">二、安全监控</h2>
 
         <div class="form-grid-2">
@@ -360,10 +360,10 @@
                 <textarea class="form-control" name="emergency_response" rows="2" placeholder="无。">{{ report.emergency_response if report else '' }}</textarea>
             </label>
         </div>
-    </section>
+    </div>
 
     {# --- Section 3: 攻击路径评估 --- #}
-    <section class="section-card">
+    <div>
         <h2 class="section-card-title">三、攻击路径评估</h2>
         <label class="form-field">
             <textarea class="form-control" name="attack_path_assessment" rows="2" placeholder="暂无">{{ report.attack_path_assessment if report else '暂无' }}</textarea>
@@ -382,10 +382,10 @@
                 </div>
                 <input type="file" class="paste-zone-file" name="attack_path_screenshot_path" accept="image/png,image/jpeg,image/webp" hidden>
             </div>
-    </section>
+    </div>
 
     {# --- Section 4: 重点工作内容 --- #}
-    <section class="section-card">
+    <div>
         <h2 class="section-card-title">四、重点工作内容</h2>
         <label class="form-field">
             <textarea class="form-control" name="key_work_content" rows="3" placeholder="暂无">{{ report.key_work_content if report else '暂无' }}</textarea>
@@ -403,10 +403,10 @@
                 </div>
                 <input type="file" class="paste-zone-file" name="key_work_screenshot_path" accept="image/png,image/jpeg,image/webp" hidden>
             </div>
-    </section>
+    </div>
 
     {# --- Section 5: 运营人员 --- #}
-    <section class="section-card">
+    <div>
         <h2 class="section-card-title">五、运营人员</h2>
         <p class="section-card-copy">以下运营人员信息在 <a href="/daily-report/operators">运营人员管理</a> 中维护。</p>
         <div class="table-responsive">
@@ -435,7 +435,7 @@
                 </tbody>
             </table>
         </div>
-    </section>
+    </div>
 
     {# --- Actions --- #}
     <div class="form-actions">

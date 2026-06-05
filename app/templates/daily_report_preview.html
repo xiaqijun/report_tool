@@ -20,25 +20,23 @@
     </div>
 </div>
 
-<section class="section-card">
-    <div class="docx-preview-toolbar">
-        <div class="docx-preview-controls" role="group" aria-label="预览缩放模式">
-            <button type="button" class="btn btn-outline-secondary docx-preview-toggle is-active" data-preview-mode="original">100% 原始比例</button>
-            <button type="button" class="btn btn-outline-secondary docx-preview-toggle" data-preview-mode="fit-width">适应宽度</button>
-        </div>
-        <span class="docx-preview-note">当前页面直接渲染下载的 Word 文档。</span>
-        <span id="docx-preview-pagination" class="docx-preview-pagination" hidden></span>
+<div class="docx-preview-toolbar">
+    <div class="docx-preview-controls" role="group" aria-label="预览缩放模式">
+        <button type="button" class="btn btn-outline-secondary docx-preview-toggle is-active" data-preview-mode="original">100% 原始比例</button>
+        <button type="button" class="btn btn-outline-secondary docx-preview-toggle" data-preview-mode="fit-width">适应宽度</button>
     </div>
-    <div id="docx-preview-status" class="docx-preview-status">正在加载 Word 预览...</div>
-    <div id="docx-preview-stage" class="docx-preview-stage" hidden>
-        <iframe
-            id="docx-preview-frame"
-            class="docx-preview-frame"
-            title="Word 文档预览"
-            loading="eager"
-        ></iframe>
-    </div>
-</section>
+    <span class="docx-preview-note">当前页面直接渲染下载的 Word 文档。</span>
+    <span id="docx-preview-pagination" class="docx-preview-pagination" hidden></span>
+</div>
+<div id="docx-preview-status" class="docx-preview-status">正在加载 Word 预览...</div>
+<div id="docx-preview-stage" class="docx-preview-stage" hidden>
+    <iframe
+        id="docx-preview-frame"
+        class="docx-preview-frame"
+        title="Word 文档预览"
+        loading="eager"
+    ></iframe>
+</div>
 
 {% endif %}
 

@@ -18,6 +18,13 @@ DATASET_DEFINITIONS = {
         "columns": [("enterprise_project", "企业项目"), ("owner_name", "负责人"), ("note", "备注"), ("updated_at", "更新时间")],
         "search_fields": ["enterprise_project", "owner_name", "note"],
     },
+    "owner-emails": {
+        "table": "owner_emails",
+        "title": "责任人-邮箱映射表",
+        "template_filename": "责任人邮箱导入模板.xlsx",
+        "columns": [("owner_name", "责任人"), ("email", "邮箱"), ("note", "备注"), ("updated_at", "更新时间")],
+        "search_fields": ["owner_name", "email", "note"],
+    },
     "unquota-hosts": {
         "table": "unquota_hosts",
         "title": "未配额主机列表",
@@ -125,6 +132,14 @@ def init_db() -> None:
                 id BIGINT PRIMARY KEY AUTO_INCREMENT,
                 enterprise_project VARCHAR(255) NOT NULL UNIQUE,
                 owner_name VARCHAR(255) NOT NULL,
+                note TEXT,
+                updated_at VARCHAR(32) NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS owner_emails (
+                id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                owner_name VARCHAR(255) NOT NULL,
+                email VARCHAR(255) NOT NULL,
                 note TEXT,
                 updated_at VARCHAR(32) NOT NULL
             );
@@ -336,6 +351,9 @@ def save_dataset_record(dataset_key: str, payload: dict[str, str], record_id: in
     if dataset_key == "owner-mappings":
         _save_owner_mapping(payload, record_id)
         return
+    if dataset_key == "owner-emails":
+        _save_owner_email(payload, record_id)
+        return
     _save_host_record(DATASET_DEFINITIONS[dataset_key]["table"], payload, record_id)
 
 
@@ -364,6 +382,14 @@ def map_import_row(dataset_key: str, row: dict[str, str]) -> dict[str, str] | No
         if not enterprise_project or not owner_name:
             return None
         return {"enterprise_project": enterprise_project, "owner_name": owner_name, "note": note}
+
+    if dataset_key == "owner-emails":
+        owner_name = row.get("责任人", row.get("owner_name", "")).strip()
+        email = row.get("邮箱", row.get("email", "")).strip()
+        note = row.get("备注", row.get("note", "")).strip()
+        if not owner_name or not email:
+            return None
+        return {"owner_name": owner_name, "email": email, "note": note}
 
     server_id = row.get("服务器ID", row.get("server_id", "")).strip()
     ip_address = row.get("IP地址", row.get("ip_address", "")).strip()
@@ -460,6 +486,11 @@ def get_result_history(batch_code: str) -> dict[str, object] | None:
         return connection.execute("SELECT * FROM result_histories WHERE batch_code = ?", (batch_code,)).fetchone()
 
 
+def delete_result_history(batch_code: str) -> None:
+    with get_connection() as connection:
+        connection.execute("DELETE FROM result_histories WHERE batch_code = ?", (batch_code,))
+
+
 def _ensure_column(connection: MySQLConnection, table_name: str, column_name: str, column_definition: str) -> None:
     existing_columns = connection.execute(
         """
@@ -495,6 +526,30 @@ def _save_owner_mapping(payload: dict[str, str], record_id: int | None) -> None:
         connection.execute(
             "INSERT INTO owner_mappings (enterprise_project, owner_name, note, updated_at) VALUES (?, ?, ?, ?)",
             (payload["enterprise_project"], payload["owner_name"], payload.get("note", ""), now),
+        )
+
+
+def _save_owner_email(payload: dict[str, str], record_id: int | None) -> None:
+    now = datetime.now().isoformat(timespec="seconds")
+    with get_connection() as connection:
+        if record_id is not None:
+            connection.execute(
+                "UPDATE owner_emails SET owner_name = ?, email = ?, note = ?, updated_at = ? WHERE id = ?",
+                (payload["owner_name"], payload["email"], payload.get("note", ""), now, record_id),
+            )
+            return
+
+        existing = connection.execute("SELECT id FROM owner_emails WHERE owner_name = ? AND email = ?", (payload["owner_name"], payload["email"])).fetchone()
+        if existing:
+            connection.execute(
+                "UPDATE owner_emails SET note = ?, updated_at = ? WHERE id = ?",
+                (payload.get("note", ""), now, existing["id"]),
+            )
+            return
+
+        connection.execute(
+            "INSERT INTO owner_emails (owner_name, email, note, updated_at) VALUES (?, ?, ?, ?)",
+            (payload["owner_name"], payload["email"], payload.get("note", ""), now),
         )
 
 

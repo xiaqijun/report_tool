@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from app.auth import get_session_user, require_login
-from app.db import get_result_history, list_result_histories
+from app.db import delete_result_history, get_result_history, list_result_histories
 from app.services.inventory import OUTPUT_COLUMNS, generate_from_asset_file, persist_upload
 from app.services.system_update import check_version, run_update
 
@@ -137,6 +137,16 @@ async def history_page(request: Request, q: str = "", page: int = 1) -> Response
             "version_status": _pop_version_status(request),
         },
     )
+
+
+@router.post("/history/{batch_code}/delete", response_model=None)
+async def delete_history(request: Request, batch_code: str) -> RedirectResponse:
+    current_user = require_login(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+
+    delete_result_history(batch_code)
+    return RedirectResponse(url="/history", status_code=302)
 
 
 @router.get("/download/{batch_code}/{result_key}", response_model=None)

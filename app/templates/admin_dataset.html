@@ -8,59 +8,57 @@
 
 {% block page_content %}
 <main class="content-stack content-wide">
-    <section class="section-card table-section merged-data-card">
-        <div class="section-header section-header-tight compact-page-header-row">
-            <h1>{{ dataset.title }}</h1>
-            <div class="page-toolbar">
-                <a class="btn btn-primary toolbar-primary-button" href="/admin/{{ dataset_key }}?q={{ query }}&page={{ page }}&create=1">新增</a>
-                <a class="ghost-button btn btn-outline-secondary" href="/static/import-templates/{{ dataset.template_filename }}" download="{{ dataset.template_filename }}">下载模板</a>
-                <form action="/admin/{{ dataset_key }}/import" method="post" enctype="multipart/form-data" class="compact-inline-form import-toolbar-form">
-                    <input class="form-control" type="file" name="import_file" accept=".csv,.xlsx,.xlsm" required>
-                    <button type="submit" class="ghost-button btn btn-outline-secondary">导入数据</button>
-                </form>
-            </div>
-        </div>
-        <div class="data-card-toolbar">
-            <div class="summary-strip table-summary-strip">
-                <article class="summary-chip"><span>记录数</span><strong>{{ total }}</strong></article>
-                <article class="summary-chip"><span>当前页</span><strong>{{ page }} / {{ total_pages }}</strong></article>
-                <article class="summary-chip"><span>搜索词</span><strong>{{ query or '全部' }}</strong></article>
-            </div>
-            <form action="/admin/{{ dataset_key }}" method="get" class="table-search-form">
-                <input class="form-control" type="text" name="q" value="{{ query }}" placeholder="输入关键字搜索">
-                <button type="submit" class="ghost-button btn btn-outline-secondary">搜索</button>
+    <div class="section-header section-header-tight compact-page-header-row">
+        <h1>{{ dataset.title }}</h1>
+        <div class="page-toolbar">
+            <a class="btn btn-primary toolbar-primary-button" href="/admin/{{ dataset_key }}?q={{ query }}&page={{ page }}&create=1">新增</a>
+            <a class="ghost-button btn btn-outline-secondary" href="/static/import-templates/{{ dataset.template_filename }}" download="{{ dataset.template_filename }}">下载模板</a>
+            <form action="/admin/{{ dataset_key }}/import" method="post" enctype="multipart/form-data" class="compact-inline-form import-toolbar-form">
+                <input class="form-control" type="file" name="import_file" accept=".csv,.xlsx,.xlsm" required>
+                <button type="submit" class="ghost-button btn btn-outline-secondary">导入数据</button>
             </form>
         </div>
-        <div class="table-responsive">
-        <table class="data-table table table-vcenter">
-            <thead>
-                <tr>
-                    {% for field, label in dataset.columns %}
-                    <th>{{ label }}</th>
-                    {% endfor %}
-                    <th>操作</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for record in records %}
-                <tr>
-                    {% for field, label in dataset.columns %}
-                    <td>{{ record[field] }}</td>
-                    {% endfor %}
-                    <td class="actions-cell">
-                        <a class="link-button btn btn-outline-primary btn-sm" href="/admin/{{ dataset_key }}?q={{ query }}&page={{ page }}&edit_id={{ record.id }}">编辑</a>
-                        <form action="/admin/{{ dataset_key }}/{{ record.id }}/delete" method="post">
-                            <button type="submit" class="danger-button btn btn-danger btn-sm">删除</button>
-                        </form>
-                    </td>
-                </tr>
-                {% else %}
-                <tr><td colspan="{{ dataset.columns|length + 1 }}">暂无数据。</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    </div>
+    <div class="data-card-toolbar">
+        <div class="summary-strip table-summary-strip">
+            <article class="summary-chip"><span>记录数</span><strong>{{ total }}</strong></article>
+            <article class="summary-chip"><span>当前页</span><strong>{{ page }} / {{ total_pages }}</strong></article>
+            <article class="summary-chip"><span>搜索词</span><strong>{{ query or '全部' }}</strong></article>
         </div>
-    </section>
+        <form action="/admin/{{ dataset_key }}" method="get" class="table-search-form">
+            <input class="form-control" type="text" name="q" value="{{ query }}" placeholder="输入关键字搜索">
+            <button type="submit" class="ghost-button btn btn-outline-secondary">搜索</button>
+        </form>
+    </div>
+    <div class="table-responsive">
+    <table class="data-table table table-vcenter">
+        <thead>
+            <tr>
+                {% for field, label in dataset.columns %}
+                <th>{{ label }}</th>
+                {% endfor %}
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for record in records %}
+            <tr>
+                {% for field, label in dataset.columns %}
+                <td>{{ record[field] }}</td>
+                {% endfor %}
+                <td class="actions-cell">
+                    <a class="link-button btn btn-outline-primary btn-sm" href="/admin/{{ dataset_key }}?q={{ query }}&page={{ page }}&edit_id={{ record.id }}">编辑</a>
+                    <form action="/admin/{{ dataset_key }}/{{ record.id }}/delete" method="post">
+                        <button type="submit" class="danger-button btn btn-danger btn-sm">删除</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="{{ dataset.columns|length + 1 }}">暂无数据。</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
 
     <div class="pager-rail">
         <div class="pager">

@@ -61,7 +61,7 @@ async def dataset_page(request: Request, dataset_key: str, q: str = "", page: in
 
 
 @router.post("/{dataset_key}/save", response_model=None)
-async def save_dataset(request: Request, dataset_key: str, record_id: str | None = Form(None), enterprise_project: str = Form(""), owner_name: str = Form(""), server_id: str = Form(""), ip_address: str = Form(""), server_name: str = Form(""), note: str = Form("")) -> Response:
+async def save_dataset(request: Request, dataset_key: str, record_id: str | None = Form(None), enterprise_project: str = Form(""), owner_name: str = Form(""), email: str = Form(""), server_id: str = Form(""), ip_address: str = Form(""), server_name: str = Form(""), note: str = Form("")) -> Response:
     current_user = require_login(request)
     if isinstance(current_user, RedirectResponse):
         return current_user
@@ -75,6 +75,7 @@ async def save_dataset(request: Request, dataset_key: str, record_id: str | None
         {
             "enterprise_project": enterprise_project.strip(),
             "owner_name": owner_name.strip(),
+            "email": email.strip(),
             "server_id": server_id.strip(),
             "ip_address": ip_address.strip(),
             "server_name": server_name.strip(),
