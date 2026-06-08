@@ -769,3 +769,20 @@ def get_llm_settings() -> dict[str, object] | None:
 
 def save_llm_settings(payload: dict[str, object]) -> None:
     save_app_setting("llm_settings", json.dumps(payload, ensure_ascii=False))
+
+
+def get_email_settings() -> dict[str, object] | None:
+    raw_value = get_app_setting("email_settings")
+    if raw_value is None:
+        return None
+    try:
+        parsed = json.loads(raw_value)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    return parsed
+
+
+def save_email_settings(payload: dict[str, object]) -> None:
+    save_app_setting("email_settings", json.dumps(payload, ensure_ascii=False))

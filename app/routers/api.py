@@ -382,3 +382,328 @@ async def api_paste_screenshot(request: Request):
         f.write(base64.b64decode(encoded))
 
     return {"path": file_path}
+
+
+@router.get("/email/settings")
+async def api_get_email_settings(request: Request):
+    """Get email settings."""
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+
+    settings = db.get_email_settings()
+    return {"settings": settings}
+
+
+@router.post("/email/settings/save")
+async def api_save_email_settings(request: Request):
+    """Save email settings."""
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+
+    data = await request.json()
+    db.save_email_settings(data)
+    return {"success": True}
+
+
+@router.post("/email/test")
+async def api_test_email(request: Request):
+    """Test email connection."""
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+
+    data = await request.json()
+    from ..services.email_service import test_smtp_connection
+    result = test_smtp_connection(data)
+    return result
+
+
+@router.post("/daily-report/send-email")
+async def api_send_daily_report_email(request: Request):
+    """Send daily report email with host security warning data."""
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+
+    data = await request.json()
+    to_list = data.get("to_list", [])
+    cc_list = data.get("cc_list", [])
+    subject = data.get("subject", "")
+    attach_docx = data.get("attach_docx", False)
+    batch_code = data.get("batch_code", "")
+
+    if not to_list:
+        raise HTTPException(status_code=400, detail="收件人不能为空")
+
+    from datetime import date
+    from pathlib import Path
+    from ..services.email_service import send_daily_report_email
+    from ..services.spreadsheets import read_table_file
+
+    today = date.today().isoformat()
+
+    # Get the latest or specified result history
+    if batch_code:
+        result_record = db.get_result_history(batch_code)
+    else:
+        records, _ = db.list_result_histories(page=1, page_size=1)
+        result_record = records[0] if records else None
+
+    if not result_record:
+        raise HTTPException(status_code=404, detail="未找到生成记录，请先生成预警报告")
+
+    # Read host data from files
+    protection_interrupted = []
+    agent_missing = []
+    online_unprotected = []
+
+    if result_record.get("protection_interrupted_path"):
+        path = Path(result_record["protection_interrupted_path"])
+        if path.exists():
+            try:
+                protection_interrupted = read_table_file(path)
+            except Exception:
+                pass
+
+    if result_record.get("agent_missing_path"):
+        path = Path(result_record["agent_missing_path"])
+        if path.exists():
+            try:
+                agent_missing = read_table_file(path)
+            except Exception:
+                pass
+
+    if result_record.get("online_unprotected_path"):
+        path = Path(result_record["online_unprotected_path"])
+        if path.exists():
+            try:
+                online_unprotected = read_table_file(path)
+            except Exception:
+                pass
+
+    # Generate DOCX if needed
+    docx_path = None
+    if attach_docx:
+        daily_report = db.get_daily_report_by_date(today)
+        if daily_report:
+            from ..services.docx_generator import generate_daily_report_docx
+            operators = db.list_ops_personnel()
+            docx_path = generate_daily_report_docx(daily_report, operators)
+
+    # Get email settings
+    email_settings = db.get_email_settings() or {}
+
+    # Build subject if not provided
+    if not subject:
+        subject = f"安全运营日报 - {today}"
+
+    # Send email
+    report_data = {
+        "protection_interrupted": protection_interrupted,
+        "agent_missing": agent_missing,
+        "online_unprotected": online_unprotected,
+    }
+
+    result = send_daily_report_email(
+        to_list=to_list,
+        report_date=today,
+        report_data=report_data,
+        cc_list=cc_list if cc_list else None,
+        docx_path=str(docx_path) if docx_path else None,
+        smtp_config=email_settings,
+    )
+
+    return result
+
+
+@router.post("/email/preview")
+async def api_preview_email(request: Request):
+    """Preview warning email HTML."""
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+
+    data = await request.json()
+    batch_code = data.get("batch_code", "")
+
+    if not batch_code:
+        raise HTTPException(status_code=400, detail="批次号不能为空")
+
+    from pathlib import Path
+    from datetime import datetime
+    from ..services.email_service import generate_email_from_report
+    from ..services.spreadsheets import read_table_file
+
+    # Get current record
+    current_record = db.get_result_history(batch_code)
+    if not current_record:
+        raise HTTPException(status_code=404, detail="未找到该记录")
+
+    # Read host data
+    def read_host_data(path_str):
+        if not path_str:
+            return []
+        path = Path(path_str)
+        if path.exists():
+            try:
+                return read_table_file(path)
+            except Exception:
+                pass
+        return []
+
+    current_data = {
+        "protection_interrupted": read_host_data(current_record.get("protection_interrupted_path")),
+        "agent_missing": read_host_data(current_record.get("agent_missing_path")),
+        "online_unprotected": read_host_data(current_record.get("online_unprotected_path")),
+    }
+
+    # Find previous week's record and read its data
+    week_changes = None
+    prev_data = {"protection_interrupted": [], "agent_missing": [], "online_unprotected": []}
+    try:
+        records, _ = db.list_result_histories(page=1, page_size=100)
+        current_time = datetime.fromisoformat(current_record["created_at"].replace("Z", "+00:00")) if "T" in current_record["created_at"] else datetime.strptime(current_record["created_at"][:19], "%Y-%m-%dT%H:%M:%S")
+
+        for rec in records:
+            if rec["batch_code"] == batch_code:
+                continue
+            try:
+                rec_time = datetime.fromisoformat(rec["created_at"].replace("Z", "+00:00")) if "T" in rec["created_at"] else datetime.strptime(rec["created_at"][:19], "%Y-%m-%dT%H:%M:%S")
+                days_diff = (current_time - rec_time).days
+                if 3 <= days_diff <= 14:
+                    week_changes = {
+                        "protection_interrupted": current_record.get("protection_interrupted_count", 0) - rec.get("protection_interrupted_count", 0),
+                        "agent_missing": current_record.get("agent_missing_count", 0) - rec.get("agent_missing_count", 0),
+                        "online_unprotected": current_record.get("online_unprotected_count", 0) - rec.get("online_unprotected_count", 0),
+                    }
+                    # Read previous week's data
+                    prev_data = {
+                        "protection_interrupted": read_host_data(rec.get("protection_interrupted_path")),
+                        "agent_missing": read_host_data(rec.get("agent_missing_path")),
+                        "online_unprotected": read_host_data(rec.get("online_unprotected_path")),
+                    }
+                    break
+            except (ValueError, KeyError):
+                continue
+    except Exception:
+        pass
+
+    # Get report date
+    report_date = ""
+    # batch_code format: 2026060310344434b197 (first 8 chars are date)
+    if len(batch_code) >= 8 and batch_code[:8].isdigit():
+        date_part = batch_code[:8]
+        report_date = f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:8]}"
+
+    html = generate_email_from_report(
+        report_date=report_date,
+        protection_interrupted=current_data["protection_interrupted"],
+        agent_missing=current_data["agent_missing"],
+        online_unprotected=current_data["online_unprotected"],
+        week_changes=week_changes,
+        prev_protection_interrupted=prev_data["protection_interrupted"],
+        prev_agent_missing=prev_data["agent_missing"],
+        prev_online_unprotected=prev_data["online_unprotected"],
+    )
+
+    return {"html": html}
+
+
+@router.post("/send-warning-email")
+async def api_send_warning_email(request: Request):
+    """Send warning email with week-over-week comparison."""
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+
+    data = await request.json()
+    to_list = data.get("to_list", [])
+    cc_list = data.get("cc_list", [])
+    batch_code = data.get("batch_code", "")
+
+    if not to_list:
+        raise HTTPException(status_code=400, detail="收件人不能为空")
+    if not batch_code:
+        raise HTTPException(status_code=400, detail="批次号不能为空")
+
+    from pathlib import Path
+    from datetime import datetime
+    from ..services.email_service import send_warning_email
+    from ..services.spreadsheets import read_table_file
+
+    # Get current record
+    current_record = db.get_result_history(batch_code)
+    if not current_record:
+        raise HTTPException(status_code=404, detail="未找到该记录")
+
+    # Get current data
+    def read_host_data(path_str):
+        if not path_str:
+            return []
+        path = Path(path_str)
+        if path.exists():
+            try:
+                return read_table_file(path)
+            except Exception:
+                pass
+        return []
+
+    current_data = {
+        "protection_interrupted": read_host_data(current_record.get("protection_interrupted_path")),
+        "agent_missing": read_host_data(current_record.get("agent_missing_path")),
+        "online_unprotected": read_host_data(current_record.get("online_unprotected_path")),
+    }
+
+    # Find previous week's record (closest record before current, within ~7-14 days)
+    previous_data = None
+    prev_data_files = {"protection_interrupted": [], "agent_missing": [], "online_unprotected": []}
+    try:
+        records, _ = db.list_result_histories(page=1, page_size=100)
+        current_time = datetime.fromisoformat(current_record["created_at"].replace("Z", "+00:00")) if "T" in current_record["created_at"] else datetime.strptime(current_record["created_at"][:19], "%Y-%m-%dT%H:%M:%S")
+
+        for rec in records:
+            if rec["batch_code"] == batch_code:
+                continue
+            try:
+                rec_time = datetime.fromisoformat(rec["created_at"].replace("Z", "+00:00")) if "T" in rec["created_at"] else datetime.strptime(rec["created_at"][:19], "%Y-%m-%dT%H:%M:%S")
+                days_diff = (current_time - rec_time).days
+                if 3 <= days_diff <= 14:
+                    previous_data = {
+                        "protection_interrupted_count": rec.get("protection_interrupted_count", 0),
+                        "agent_missing_count": rec.get("agent_missing_count", 0),
+                        "online_unprotected_count": rec.get("online_unprotected_count", 0),
+                    }
+                    # Read previous week's data files
+                    prev_data_files = {
+                        "protection_interrupted": read_host_data(rec.get("protection_interrupted_path")),
+                        "agent_missing": read_host_data(rec.get("agent_missing_path")),
+                        "online_unprotected": read_host_data(rec.get("online_unprotected_path")),
+                    }
+                    break
+            except (ValueError, KeyError):
+                continue
+    except Exception:
+        pass
+
+    # Get email settings
+    email_settings = db.get_email_settings() or {}
+
+    # Get report date from batch_code
+    report_date = ""
+    if len(batch_code) >= 8 and batch_code[:8].isdigit():
+        date_part = batch_code[:8]
+        report_date = f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:8]}"
+
+    result = send_warning_email(
+        to_list=to_list,
+        report_date=report_date,
+        current_data=current_data,
+        previous_data=previous_data,
+        prev_data_files=prev_data_files,
+        cc_list=cc_list if cc_list else None,
+        smtp_config=email_settings,
+    )
+
+    return result
