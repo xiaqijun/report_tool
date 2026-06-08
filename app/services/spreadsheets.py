@@ -31,17 +31,21 @@ def write_xlsx(
     headers: list[str],
     rows: list[dict[str, str]],
     summary_rows: list[dict[str, object]] | None = None,
-    detail_sheet_name: str = "表格",
+    detail_sheet_name: str = "服务器明细",
+    pivot_sheet_name: str = "按责任人统计",
 ) -> None:
     workbook = Workbook()
-    summary_sheet = workbook.active
-    summary_sheet.title = "汇总"
-    summary_headers = ["负责人", "服务器ID计数"]
-    summary_sheet.append(summary_headers)
-    for row in summary_rows or [{"负责人": "合计", "服务器ID计数": 0}]:
-        summary_sheet.append([row.get(header, "") for header in summary_headers])
 
-    sheet = workbook.create_sheet(detail_sheet_name[:31] or "表格")
+    # Sheet 1: Pivot table by 负责人
+    pivot_sheet = workbook.active
+    pivot_sheet.title = pivot_sheet_name[:31] or "按责任人统计"
+    pivot_headers = ["负责人", "服务器ID计数"]
+    pivot_sheet.append(pivot_headers)
+    for row in summary_rows or [{"负责人": "合计", "服务器ID计数": 0}]:
+        pivot_sheet.append([row.get(header, "") for header in pivot_headers])
+
+    # Sheet 2: Server detail
+    sheet = workbook.create_sheet(detail_sheet_name[:31] or "服务器明细")
     sheet.append(headers)
     for row in rows:
         sheet.append([row.get(header, "") for header in headers])
