@@ -145,8 +145,19 @@ def generate_email_from_report(
         if len(rows) < 2:
             return (html, 0)
 
-        # Keep header row as-is
+        # Uniform column widths: name=30%, count=20%, comparison=50%
+        col_widths = ["30%", "20%", "50%"]
+
+        # Keep header row but normalize column widths
         header_row_html = rows[0].group(0)
+        hdr_tds = re.findall(r'(<td[^>]*>)(.*?)(</td>)', header_row_html, re.DOTALL)
+        hdr_parts = []
+        for i, (td_open, td_content, td_close) in enumerate(hdr_tds):
+            w = col_widths[i] if i < len(col_widths) else "auto"
+            td_open = re.sub(r'width="[^"]*"', f'width="{w}"', td_open)
+            td_open = re.sub(r'width:\s*[^;"]+', f'width: {w}', td_open)
+            hdr_parts.append(f'{td_open}{td_content}{td_close}')
+        header_row_html = '<tr>' + ''.join(hdr_parts) + '</tr>'
 
         # Use first data row as template for cell styling
         first_data_row = rows[1].group(1)
@@ -154,13 +165,18 @@ def generate_email_from_report(
         if len(template_cells) < 3:
             return (html, 0)
 
-        # Extract td style templates (opening and closing tags)
+        # Extract td style templates (opening and closing tags) and normalize widths
         td_templates = []
-        for cell in template_cells:
+        for i, cell in enumerate(template_cells):
             cell_html = cell.group(0)
             td_match = re.match(r'(<td[^>]*>)(.*?)(</td>)', cell_html, re.DOTALL)
             if td_match:
-                td_templates.append((td_match.group(1), td_match.group(3)))
+                td_open = td_match.group(1)
+                # Replace width attribute
+                td_open = re.sub(r'width="[^"]*"', f'width="{col_widths[i]}"', td_open)
+                # Replace width in style
+                td_open = re.sub(r'width:\s*[^;"]+', f'width: {col_widths[i]}', td_open)
+                td_templates.append((td_open, td_match.group(3)))
 
         # Build comparison helper
         def make_comp_text(change):
