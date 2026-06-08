@@ -24,7 +24,6 @@ AGENTS.md
 
 # Frontend / React build
 frontend/
-app/static/react/
 
 # Backup files
 *.backup.*
