@@ -80,13 +80,13 @@ async def api_generate(request: Request, asset_file: UploadFile = File(...)):
     if not isinstance(user, dict):
         raise HTTPException(status_code=401, detail="未登录")
 
-    import tempfile
+    import io, tempfile
     from ..services.inventory import generate_from_asset_file
 
-    # Save uploaded file to temp path
+    content = await asset_file.read()
     suffix = Path(asset_file.filename).suffix if asset_file.filename else ".xlsx"
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp.write(await asset_file.read())
+        tmp.write(content)
         tmp_path = Path(tmp.name)
 
     try:
@@ -102,7 +102,6 @@ async def api_generate(request: Request, asset_file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     finally:
-        # Clean up temp file
         try:
             tmp_path.unlink()
         except Exception:
@@ -339,25 +338,16 @@ async def api_admin_import(request: Request, dataset_key: str, import_file: Uplo
     if dataset_key not in db.DATASET_DEFINITIONS:
         raise HTTPException(status_code=404, detail="未知数据集")
 
-    import tempfile
+    import io
     from ..services.spreadsheets import read_table_file
 
-    suffix = Path(import_file.filename).suffix if import_file.filename else ".xlsx"
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp.write(await import_file.read())
-        tmp_path = Path(tmp.name)
-
     try:
-        rows = read_table_file(tmp_path)
+        content = io.BytesIO(await import_file.read())
+        rows = read_table_file(content, filename=import_file.filename or ".xlsx")
         count = db.import_dataset_records(dataset_key, rows)
         return {"success": True, "count": count}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        try:
-            tmp_path.unlink()
-        except Exception:
-            pass
 
 
 @router.post("/change-password")
