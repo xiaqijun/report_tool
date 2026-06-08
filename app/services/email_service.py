@@ -478,6 +478,7 @@ def send_warning_email(
     cc_list: list[str] | None = None,
     smtp_config: dict | None = None,
     custom_subject: str | None = None,
+    attachments: list[dict] | None = None,
 ) -> dict:
     """Send host security warning email with week-over-week comparison."""
     try:
@@ -544,6 +545,7 @@ def send_warning_email(
             subject=subject,
             html_content=html_content,
             cc_list=cc_list,
+            attachments=attachments,
             smtp_config=smtp_config,
         )
     except Exception as e:
