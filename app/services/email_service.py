@@ -389,7 +389,7 @@ def send_email(
                     part = MIMEBase("application", "octet-stream")
                     part.set_payload(f.read())
                     encoders.encode_base64(part)
-                    part.add_header("Content-Disposition", f"attachment; filename= {filename}")
+                    part.add_header("Content-Disposition", "attachment", filename=("utf-8", "", filename))
                     msg.attach(part)
 
     try:
