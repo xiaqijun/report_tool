@@ -145,8 +145,8 @@ def generate_email_from_report(
         if len(rows) < 2:
             return (html, 0)
 
-        # Uniform column widths: name=30%, count=20%, comparison=50%
-        col_widths = ["30%", "20%", "50%"]
+        # Uniform equal column widths
+        col_widths = ["33%", "33%", "34%"]
 
         # Keep header row but normalize column widths
         header_row_html = rows[0].group(0)
