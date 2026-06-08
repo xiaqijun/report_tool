@@ -80,17 +80,16 @@ async def api_generate(request: Request, asset_file: UploadFile = File(...)):
     if not isinstance(user, dict):
         raise HTTPException(status_code=401, detail="未登录")
 
-    import io, tempfile
+    import io
     from ..services.inventory import generate_from_asset_file
 
-    content = await asset_file.read()
-    suffix = Path(asset_file.filename).suffix if asset_file.filename else ".xlsx"
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp.write(content)
-        tmp_path = Path(tmp.name)
-
     try:
-        result = generate_from_asset_file(tmp_path, user.get("display_name") or user["username"])
+        content = io.BytesIO(await asset_file.read())
+        result = generate_from_asset_file(
+            content,
+            user.get("display_name") or user["username"],
+            original_filename=asset_file.filename or "upload.xlsx",
+        )
         return {
             "result": {
                 "batch_code": result["batch_code"],
@@ -101,11 +100,6 @@ async def api_generate(request: Request, asset_file: UploadFile = File(...)):
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        try:
-            tmp_path.unlink()
-        except Exception:
-            pass
 
 
 @router.get("/history")

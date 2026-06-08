@@ -1,5 +1,6 @@
 from collections.abc import Iterable
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 
@@ -42,8 +43,9 @@ ASSET_FIELD_ALIASES = {
 }
 
 
-def generate_from_asset_file(file_path: Path, operator_name: str) -> dict[str, object]:
-    rows = read_table_file(file_path)
+def generate_from_asset_file(file_path: Path | BytesIO, operator_name: str, original_filename: str = "") -> dict[str, object]:
+    filename = original_filename or (file_path.name if isinstance(file_path, Path) else "upload.xlsx")
+    rows = read_table_file(file_path) if isinstance(file_path, Path) else read_table_file(file_path, filename=filename)
     if not rows:
         raise ValueError("上传文件为空，无法生成清单。")
 
@@ -106,7 +108,7 @@ def generate_from_asset_file(file_path: Path, operator_name: str) -> dict[str, o
 
     create_result_history(
         batch_code=batch_code,
-        source_file_name=file_path.name,
+        source_file_name=filename,
         operator_name=operator_name,
         online_unprotected_count=len(online_unprotected),
         agent_missing_count=len(agent_missing),
@@ -117,7 +119,7 @@ def generate_from_asset_file(file_path: Path, operator_name: str) -> dict[str, o
         protection_interrupted_path=str(interrupted_path["xlsx"]),
         missing_owner_projects="、".join(sorted(missing_owner_projects)),
     )
-    save_import_history(file_path.name, operator_name, "processed")
+    save_import_history(filename, operator_name, "processed")
 
     return {
         "batch_code": batch_code,
