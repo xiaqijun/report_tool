@@ -3,11 +3,12 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response as FResponse
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import DEFAULT_ADMIN_PASSWORD, DEFAULT_ADMIN_USERNAME, SECRET_KEY, ensure_runtime_dirs
-from app.db import ensure_default_admin, init_db
+from app.db import ensure_default_admin, init_db, get_result_history
+from app.auth import require_login
 from app.routers.admin import router as admin_router
 from app.routers.api import router as api_router
 from app.routers.auth import router as auth_router
@@ -38,6 +39,32 @@ def create_app() -> FastAPI:
     # app.include_router(web_router)
     # app.include_router(daily_report_router)
 
+    # File download route (legacy, used by React frontend)
+    @app.get("/download/{batch_code}/{result_key}")
+    async def download_result(request: Request, batch_code: str, result_key: str):
+        """Download result file."""
+        current_user = require_login(request)
+        if not isinstance(current_user, dict):
+            return RedirectResponse(url="/login", status_code=302)
+
+        history = get_result_history(batch_code)
+        if history is None:
+            return RedirectResponse(url="/", status_code=302)
+
+        path_field_map = {
+            "online-unprotected": "online_unprotected_path",
+            "agent-missing": "agent_missing_path",
+            "protection-interrupted": "protection_interrupted_path",
+        }
+        path_field = path_field_map.get(result_key)
+        if path_field is None:
+            return RedirectResponse(url="/", status_code=302)
+
+        file_path = Path(str(history[path_field]))
+        if not file_path.exists():
+            return RedirectResponse(url="/", status_code=302)
+        return FileResponse(path=file_path, filename=file_path.name)
+
     # Serve React frontend
     if REACT_DIR.exists():
         app.mount("/assets", StaticFiles(directory=REACT_DIR / "assets"), name="react-assets")
@@ -57,6 +84,9 @@ def create_app() -> FastAPI:
                 raise HTTPException(status_code=404, detail="Not found")
             # Skip static files
             if path.startswith("static/"):
+                raise HTTPException(status_code=404, detail="Not found")
+            # Skip download routes
+            if path.startswith("download/"):
                 raise HTTPException(status_code=404, detail="Not found")
             # Serve React index.html
             return FileResponse(REACT_DIR / "index.html")
