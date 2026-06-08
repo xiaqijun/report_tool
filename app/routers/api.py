@@ -1,5 +1,6 @@
 """JSON API endpoints for React frontend."""
 
+from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
@@ -79,10 +80,17 @@ async def api_generate(request: Request, asset_file: UploadFile = File(...)):
     if not isinstance(user, dict):
         raise HTTPException(status_code=401, detail="未登录")
 
+    import tempfile
     from ..services.inventory import generate_from_asset_file
 
+    # Save uploaded file to temp path
+    suffix = Path(asset_file.filename).suffix if asset_file.filename else ".xlsx"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp.write(await asset_file.read())
+        tmp_path = Path(tmp.name)
+
     try:
-        result = generate_from_asset_file(asset_file, user.get("display_name") or user["username"])
+        result = generate_from_asset_file(tmp_path, user.get("display_name") or user["username"])
         return {
             "result": {
                 "batch_code": result["batch_code"],
@@ -93,6 +101,12 @@ async def api_generate(request: Request, asset_file: UploadFile = File(...)):
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        # Clean up temp file
+        try:
+            tmp_path.unlink()
+        except Exception:
+            pass
 
 
 @router.get("/history")
