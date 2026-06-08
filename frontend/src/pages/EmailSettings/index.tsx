@@ -97,6 +97,19 @@ export default function EmailSettingsPage() {
           <Form.Input field="default_subject" label="默认邮件主题" placeholder="安全运营日报" />
         </Card>
 
+        <Card title="默认收件人配置" style={{ marginBottom: 16 }}>
+          <Form.Input
+            field="default_to_list"
+            label="默认收件人"
+            placeholder="多个邮箱用逗号分隔，如 a@byd.com,b@byd.com"
+          />
+          <Form.Input
+            field="default_cc_list"
+            label="默认抄送人"
+            placeholder="多个邮箱用逗号分隔，留空则不抄送"
+          />
+        </Card>
+
         <Space>
           <Button type="primary" htmlType="submit" loading={loading} icon={<IconSave />}>
             保存配置
