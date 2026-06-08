@@ -513,6 +513,7 @@ async def api_send_daily_report_email(request: Request):
         cc_list=cc_list if cc_list else None,
         docx_path=str(docx_path) if docx_path else None,
         smtp_config=email_settings,
+        custom_subject=email_settings.get("daily_report_subject") if email_settings else None,
     )
 
     return result
@@ -714,6 +715,7 @@ async def api_send_warning_email(request: Request):
         prev_data_files=prev_data_files,
         cc_list=cc_list if cc_list else None,
         smtp_config=email_settings,
+        custom_subject=email_settings.get("host_warning_subject") if email_settings else None,
     )
 
     return result

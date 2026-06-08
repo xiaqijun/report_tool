@@ -427,6 +427,7 @@ def send_daily_report_email(
     cc_list: list[str] | None = None,
     docx_path: str | None = None,
     smtp_config: dict | None = None,
+    custom_subject: str | None = None,
 ) -> dict:
     """Send daily security report email."""
     try:
@@ -448,7 +449,7 @@ def send_daily_report_email(
         except ValueError:
             date_display = report_date
 
-        subject = f"【主机安全预警】主机安全Agent防护中断&未安装Agent&未已安装Agent未配置配额安全风险预警 - {date_display}"
+        subject = custom_subject or f"【主机安全预警】主机安全Agent防护中断&未安装Agent&未已安装Agent未配置配额安全风险预警 - {date_display}"
 
         attachments = []
         if docx_path:
@@ -476,6 +477,7 @@ def send_warning_email(
     prev_data_files: dict | None = None,
     cc_list: list[str] | None = None,
     smtp_config: dict | None = None,
+    custom_subject: str | None = None,
 ) -> dict:
     """Send host security warning email with week-over-week comparison."""
     try:
@@ -535,7 +537,7 @@ def send_warning_email(
         except ValueError:
             date_display = report_date
 
-        subject = f"【主机安全预警】主机安全Agent防护中断&未安装Agent&未已安装Agent未配置配额安全风险预警 - {date_display}"
+        subject = custom_subject or f"【主机安全预警】主机安全Agent防护中断&未安装Agent&未已安装Agent未配置配额安全风险预警 - {date_display}"
 
         return send_email(
             to_list=to_list,
