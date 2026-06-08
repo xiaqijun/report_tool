@@ -445,7 +445,7 @@ def send_daily_report_email(
         from datetime import datetime
         try:
             dt = datetime.strptime(report_date, "%Y-%m-%d")
-            date_display = f"{dt.month}月{dt.day}日"
+            date_display = f"{dt.year}年{dt.month:02d}月{dt.day:02d}日"
         except ValueError:
             date_display = report_date
 
@@ -533,7 +533,7 @@ def send_warning_email(
         from datetime import datetime
         try:
             dt = datetime.strptime(report_date, "%Y-%m-%d")
-            date_display = f"{dt.month}月{dt.day}日"
+            date_display = f"{dt.year}年{dt.month:02d}月{dt.day:02d}日"
         except ValueError:
             date_display = report_date
 
