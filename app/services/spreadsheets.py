@@ -32,13 +32,13 @@ def write_xlsx(
     rows: list[dict[str, str]],
     summary_rows: list[dict[str, object]] | None = None,
     detail_sheet_name: str = "服务器明细",
-    pivot_sheet_name: str = "按责任人统计",
+    pivot_sheet_name: str = "汇总",
 ) -> None:
     workbook = Workbook()
 
     # Sheet 1: Pivot table by 负责人
     pivot_sheet = workbook.active
-    pivot_sheet.title = pivot_sheet_name[:31] or "按责任人统计"
+    pivot_sheet.title = pivot_sheet_name[:31] or "汇总"
     pivot_headers = ["负责人", "服务器ID计数"]
     pivot_sheet.append(pivot_headers)
     for row in summary_rows or [{"负责人": "合计", "服务器ID计数": 0}]:

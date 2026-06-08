@@ -181,8 +181,8 @@ class InventoryGenerationTests(TestCase):
             self.assertRegex(xlsx_path.name, r"^比亚迪Agent在线未添加防护配置主机列表-\d{4}-\d{2}-\d{2}\.xlsx$")
 
             workbook = load_workbook(xlsx_path)
-            self.assertEqual(workbook.sheetnames, ["按责任人统计", "比亚迪Agent在线未添加防护配置主机列表"])
-            summary_sheet = workbook["按责任人统计"]
+            self.assertEqual(workbook.sheetnames, ["汇总", "比亚迪Agent在线未添加防护配置主机列表"])
+            summary_sheet = workbook["汇总"]
             table_sheet = workbook["比亚迪Agent在线未添加防护配置主机列表"]
 
             self.assertEqual(summary_sheet["A1"].value, "负责人")
