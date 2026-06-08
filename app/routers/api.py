@@ -629,6 +629,38 @@ async def api_preview_email(request: Request):
     return {"html": html}
 
 
+@router.get("/email/report-owners/{batch_code}")
+async def api_get_report_owner_emails(request: Request, batch_code: str):
+    """Get emails of responsible persons in a report."""
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+
+    record = db.get_result_history(batch_code)
+    if not record:
+        raise HTTPException(status_code=404, detail="记录不存在")
+
+    from ..services.spreadsheets import read_table_file
+
+    # Collect all unique owner names from the three result files
+    owners = set()
+    for key in ["protection_interrupted_path", "agent_missing_path", "online_unprotected_path"]:
+        path_str = record.get(key)
+        if path_str:
+            try:
+                rows = read_table_file(Path(path_str))
+                for row in rows:
+                    name = str(row.get("负责人", "")).strip()
+                    if name:
+                        owners.add(name)
+            except Exception:
+                pass
+
+    # Look up emails for these owners
+    owner_emails = db.get_owner_emails_by_names(list(owners))
+    return {"emails": [e for e in owner_emails if e], "owners": sorted(owners)}
+
+
 @router.post("/send-warning-email")
 async def api_send_warning_email(request: Request):
     """Send warning email with week-over-week comparison."""
