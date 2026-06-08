@@ -559,34 +559,39 @@ async def api_preview_email(request: Request):
         "online_unprotected": read_host_data(current_record.get("online_unprotected_path")),
     }
 
-    # Find previous week's record and read its data
+    # Find the record closest to 7 days ago for comparison
     week_changes = None
     prev_data = {"protection_interrupted": [], "agent_missing": [], "online_unprotected": []}
     try:
         records, _ = db.list_result_histories(page=1, page_size=100)
         current_time = datetime.fromisoformat(current_record["created_at"].replace("Z", "+00:00")) if "T" in current_record["created_at"] else datetime.strptime(current_record["created_at"][:19], "%Y-%m-%dT%H:%M:%S")
 
+        best_rec = None
+        best_diff = float("inf")
         for rec in records:
             if rec["batch_code"] == batch_code:
                 continue
             try:
                 rec_time = datetime.fromisoformat(rec["created_at"].replace("Z", "+00:00")) if "T" in rec["created_at"] else datetime.strptime(rec["created_at"][:19], "%Y-%m-%dT%H:%M:%S")
-                days_diff = (current_time - rec_time).days
-                if 3 <= days_diff <= 14:
-                    week_changes = {
-                        "protection_interrupted": current_record.get("protection_interrupted_count", 0) - rec.get("protection_interrupted_count", 0),
-                        "agent_missing": current_record.get("agent_missing_count", 0) - rec.get("agent_missing_count", 0),
-                        "online_unprotected": current_record.get("online_unprotected_count", 0) - rec.get("online_unprotected_count", 0),
-                    }
-                    # Read previous week's data
-                    prev_data = {
-                        "protection_interrupted": read_host_data(rec.get("protection_interrupted_path")),
-                        "agent_missing": read_host_data(rec.get("agent_missing_path")),
-                        "online_unprotected": read_host_data(rec.get("online_unprotected_path")),
-                    }
-                    break
+                days_diff = abs((current_time - rec_time).days - 7)
+                if days_diff < best_diff:
+                    best_diff = days_diff
+                    best_rec = rec
             except (ValueError, KeyError):
                 continue
+
+        if best_rec is not None:
+            week_changes = {
+                "protection_interrupted": current_record.get("protection_interrupted_count", 0) - best_rec.get("protection_interrupted_count", 0),
+                "agent_missing": current_record.get("agent_missing_count", 0) - best_rec.get("agent_missing_count", 0),
+                "online_unprotected": current_record.get("online_unprotected_count", 0) - best_rec.get("online_unprotected_count", 0),
+            }
+            # Read previous week's data
+            prev_data = {
+                "protection_interrupted": read_host_data(best_rec.get("protection_interrupted_path")),
+                "agent_missing": read_host_data(best_rec.get("agent_missing_path")),
+                "online_unprotected": read_host_data(best_rec.get("online_unprotected_path")),
+            }
     except Exception:
         pass
 
@@ -656,34 +661,39 @@ async def api_send_warning_email(request: Request):
         "online_unprotected": read_host_data(current_record.get("online_unprotected_path")),
     }
 
-    # Find previous week's record (closest record before current, within ~7-14 days)
+    # Find the record closest to 7 days ago for comparison
     previous_data = None
     prev_data_files = {"protection_interrupted": [], "agent_missing": [], "online_unprotected": []}
     try:
         records, _ = db.list_result_histories(page=1, page_size=100)
         current_time = datetime.fromisoformat(current_record["created_at"].replace("Z", "+00:00")) if "T" in current_record["created_at"] else datetime.strptime(current_record["created_at"][:19], "%Y-%m-%dT%H:%M:%S")
 
+        best_rec = None
+        best_diff = float("inf")
         for rec in records:
             if rec["batch_code"] == batch_code:
                 continue
             try:
                 rec_time = datetime.fromisoformat(rec["created_at"].replace("Z", "+00:00")) if "T" in rec["created_at"] else datetime.strptime(rec["created_at"][:19], "%Y-%m-%dT%H:%M:%S")
-                days_diff = (current_time - rec_time).days
-                if 3 <= days_diff <= 14:
-                    previous_data = {
-                        "protection_interrupted_count": rec.get("protection_interrupted_count", 0),
-                        "agent_missing_count": rec.get("agent_missing_count", 0),
-                        "online_unprotected_count": rec.get("online_unprotected_count", 0),
-                    }
-                    # Read previous week's data files
-                    prev_data_files = {
-                        "protection_interrupted": read_host_data(rec.get("protection_interrupted_path")),
-                        "agent_missing": read_host_data(rec.get("agent_missing_path")),
-                        "online_unprotected": read_host_data(rec.get("online_unprotected_path")),
-                    }
-                    break
+                days_diff = abs((current_time - rec_time).days - 7)
+                if days_diff < best_diff:
+                    best_diff = days_diff
+                    best_rec = rec
             except (ValueError, KeyError):
                 continue
+
+        if best_rec is not None:
+            previous_data = {
+                "protection_interrupted_count": best_rec.get("protection_interrupted_count", 0),
+                "agent_missing_count": best_rec.get("agent_missing_count", 0),
+                "online_unprotected_count": best_rec.get("online_unprotected_count", 0),
+            }
+            # Read previous week's data files
+            prev_data_files = {
+                "protection_interrupted": read_host_data(best_rec.get("protection_interrupted_path")),
+                "agent_missing": read_host_data(best_rec.get("agent_missing_path")),
+                "online_unprotected": read_host_data(best_rec.get("online_unprotected_path")),
+            }
     except Exception:
         pass
 
