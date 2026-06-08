@@ -707,19 +707,14 @@ async def api_send_warning_email(request: Request):
         date_part = batch_code[:8]
         report_date = f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:8]}"
 
-    # Build attachments from the three result files
+    # Build attachments from the three result files (use original filenames)
     attachments = []
-    file_labels = [
-        ("protection_interrupted_path", "防护中断.xlsx"),
-        ("agent_missing_path", "Agent缺失.xlsx"),
-        ("online_unprotected_path", "在线未防护.xlsx"),
-    ]
-    for path_key, label in file_labels:
+    for path_key in ["protection_interrupted_path", "agent_missing_path", "online_unprotected_path"]:
         file_path_str = current_record.get(path_key)
         if file_path_str:
             fp = Path(file_path_str)
             if fp.exists():
-                attachments.append({"path": str(fp), "filename": label})
+                attachments.append({"path": str(fp), "filename": fp.name})
 
     result = send_warning_email(
         to_list=to_list,
