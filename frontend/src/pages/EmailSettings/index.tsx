@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Form, Button, Card, Switch, Toast, Typography, Space } from '@douyinfe/semi-ui'
 import { IconSave, IconMail } from '@douyinfe/semi-icons'
 import api from '../../api'
@@ -8,7 +8,8 @@ const { Text } = Typography
 export default function EmailSettingsPage() {
   const [loading, setLoading] = useState(false)
   const [testing, setTesting] = useState(false)
-  const [formApi, setFormApi] = useState<any>(null)
+  const [savedSettings, setSavedSettings] = useState<Record<string, any> | null>(null)
+  const formApiRef = useRef<any>(null)
 
   useEffect(() => {
     fetchData()
@@ -18,7 +19,9 @@ export default function EmailSettingsPage() {
     try {
       const response = await api.get('/api/email/settings')
       if (response.data.settings) {
-        formApi?.setValues(response.data.settings)
+        setSavedSettings(response.data.settings)
+        // Also set via formApi if form is already mounted
+        formApiRef.current?.setValues(response.data.settings)
       }
     } catch {
       Toast.error('获取配置失败')
@@ -30,7 +33,7 @@ export default function EmailSettingsPage() {
     try {
       await api.post('/api/email/settings/save', values)
       Toast.success('保存成功')
-      fetchData()
+      setSavedSettings(values)
     } catch {
       Toast.error('保存失败')
     } finally {
@@ -39,7 +42,7 @@ export default function EmailSettingsPage() {
   }
 
   const handleTest = async () => {
-    const values = formApi?.getValues()
+    const values = formApiRef.current?.getValues()
     if (!values?.smtp_host) {
       Toast.warning('请先填写SMTP服务器地址')
       return
@@ -67,7 +70,7 @@ export default function EmailSettingsPage() {
         </Text>
       </Card>
 
-      <Form onSubmit={handleSubmit} getFormApi={(api) => setFormApi(api)}>
+      <Form onSubmit={handleSubmit} initValues={savedSettings || {}} getFormApi={(api) => { formApiRef.current = api }}>
         <Card title="SMTP 服务器配置" style={{ marginBottom: 16 }}>
           <Form.Input field="smtp_host" label="SMTP 服务器" placeholder="smtp.qq.com" />
           <Form.InputNumber field="smtp_port" label="端口" placeholder="465" min={1} max={65535} />
