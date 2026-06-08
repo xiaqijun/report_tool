@@ -339,11 +339,25 @@ async def api_admin_import(request: Request, dataset_key: str, import_file: Uplo
     if dataset_key not in db.DATASET_DEFINITIONS:
         raise HTTPException(status_code=404, detail="未知数据集")
 
+    import tempfile
+    from ..services.spreadsheets import read_table_file
+
+    suffix = Path(import_file.filename).suffix if import_file.filename else ".xlsx"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp.write(await import_file.read())
+        tmp_path = Path(tmp.name)
+
     try:
-        count = db.import_dataset_records(dataset_key, import_file)
+        rows = read_table_file(tmp_path)
+        count = db.import_dataset_records(dataset_key, rows)
         return {"success": True, "count": count}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        try:
+            tmp_path.unlink()
+        except Exception:
+            pass
 
 
 @router.post("/change-password")
