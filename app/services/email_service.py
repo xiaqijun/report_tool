@@ -449,7 +449,7 @@ def send_daily_report_email(
         except ValueError:
             date_display = report_date
 
-        subject = custom_subject or f"【主机安全预警】主机安全Agent防护中断&未安装Agent&未已安装Agent未配置配额安全风险预警 - {date_display}"
+        subject = custom_subject.replace("{date}", date_display) if custom_subject else f"【主机安全预警】主机安全Agent防护中断&未安装Agent&未已安装Agent未配置配额安全风险预警 - {date_display}"
 
         attachments = []
         if docx_path:
@@ -537,7 +537,7 @@ def send_warning_email(
         except ValueError:
             date_display = report_date
 
-        subject = custom_subject or f"【主机安全预警】主机安全Agent防护中断&未安装Agent&未已安装Agent未配置配额安全风险预警 - {date_display}"
+        subject = custom_subject.replace("{date}", date_display) if custom_subject else f"【主机安全预警】主机安全Agent防护中断&未安装Agent&未已安装Agent未配置配额安全风险预警 - {date_display}"
 
         return send_email(
             to_list=to_list,

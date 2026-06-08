@@ -77,16 +77,22 @@ export default function EmailSettingsPage() {
           <Form.Switch field="use_tls" label="使用 SSL/TLS" />
         </Card>
 
-        <Card title="邮件主题配置" style={{ marginBottom: 16 }}>
+        <Card
+          title="邮件主题配置"
+          style={{ marginBottom: 16 }}
+          headerExtraContent={
+            <Text type="tertiary" style={{ fontSize: 12 }}>支持 {`{date}`} 占位符，自动替换为日期</Text>
+          }
+        >
           <Form.Input
             field="host_warning_subject"
             label="主机预警邮件主题"
-            placeholder="【主机安全预警】主机安全Agent防护中断&未安装Agent风险预警"
+            placeholder="【主机安全预警】主机安全Agent防护中断&未安装Agent风险预警 - {date}"
           />
           <Form.Input
             field="daily_report_subject"
             label="安全日报邮件主题"
-            placeholder="【安全运营日报】"
+            placeholder="【安全运营日报】{date}"
           />
           <Form.Input field="default_subject" label="默认邮件主题" placeholder="安全运营日报" />
         </Card>
