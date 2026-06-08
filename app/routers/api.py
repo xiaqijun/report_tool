@@ -728,7 +728,7 @@ async def api_send_warning_email(request: Request):
         if file_path_str:
             fp = Path(file_path_str)
             if fp.exists():
-                attachments.append({"path": str(fp), "filename": f"比亚迪{fp.name}"})
+                attachments.append({"path": str(fp), "filename": fp.name})
 
     result = send_warning_email(
         to_list=to_list,

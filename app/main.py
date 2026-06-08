@@ -63,7 +63,7 @@ def create_app() -> FastAPI:
         file_path = Path(str(history[path_field]))
         if not file_path.exists():
             return RedirectResponse(url="/", status_code=302)
-        return FileResponse(path=file_path, filename=f"比亚迪{file_path.name}")
+        return FileResponse(path=file_path, filename=file_path.name)
 
     # Serve React frontend
     if REACT_DIR.exists():
