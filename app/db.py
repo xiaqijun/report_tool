@@ -529,17 +529,17 @@ def _save_owner_mapping(payload: dict[str, str], record_id: int | None) -> None:
         )
 
 
-def get_owner_emails_by_names(names: list[str]) -> list[str]:
-    """Get email addresses for given owner names."""
+def get_owner_emails_by_names(names: list[str]) -> list[dict[str, str]]:
+    """Get {owner_name, email} records for given owner names."""
     if not names:
         return []
     with get_connection() as connection:
         placeholders = ", ".join(["?"] * len(names))
         rows = connection.execute(
-            f"SELECT email FROM owner_emails WHERE owner_name IN ({placeholders})",
+            f"SELECT owner_name, email FROM owner_emails WHERE owner_name IN ({placeholders})",
             names,
         ).fetchall()
-        return [row["email"] for row in rows if row.get("email")]
+        return [{"owner_name": row["owner_name"], "email": row["email"]} for row in rows if row.get("email")]
 
 
 def _save_owner_email(payload: dict[str, str], record_id: int | None) -> None:

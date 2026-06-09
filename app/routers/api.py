@@ -624,9 +624,9 @@ async def api_preview_email(request: Request):
                 owner_names.add(name)
     owner_emails_lookup = {}
     if owner_names:
-        emails = db.get_owner_emails_by_names(list(owner_names))
-        for name, email in zip(sorted(owner_names), emails):
-            owner_emails_lookup[name] = email
+        rows = db.get_owner_emails_by_names(list(owner_names))
+        for row in rows:
+            owner_emails_lookup[row["owner_name"]] = row["email"]
 
     html = generate_email_from_report(
         report_date=report_date,
@@ -671,8 +671,9 @@ async def api_get_report_owner_emails(request: Request, batch_code: str):
                 pass
 
     # Look up emails for these owners
-    owner_emails = db.get_owner_emails_by_names(list(owners))
-    return {"emails": [e for e in owner_emails if e], "owners": sorted(owners)}
+    owner_email_rows = db.get_owner_emails_by_names(list(owners))
+    emails = [r["email"] for r in owner_email_rows]
+    return {"emails": emails, "owners": sorted(owners)}
 
 
 @router.post("/send-warning-email")
@@ -783,9 +784,9 @@ async def api_send_warning_email(request: Request):
                 owner_names.add(name)
     owner_emails_lookup = {}
     if owner_names:
-        emails = db.get_owner_emails_by_names(list(owner_names))
-        for name, email in zip(sorted(owner_names), emails):
-            owner_emails_lookup[name] = email
+        rows = db.get_owner_emails_by_names(list(owner_names))
+        for row in rows:
+            owner_emails_lookup[row["owner_name"]] = row["email"]
 
     result = send_warning_email(
         to_list=to_list,
