@@ -356,14 +356,15 @@ def generate_email_from_report(
             for name, email in email_rows:
                 rows_html += (
                     '<tr>'
-                    f'<td style="width: 33%; border-right: 1pt solid windowtext; border-bottom: 1pt solid windowtext; border-left: 1pt solid windowtext; border-top: none; padding: 0.75pt 0.75pt 0cm; height: 25.0125px; box-sizing: border-box;" colspan="1">'
+                    f'<td style="border-right: 1pt solid windowtext; border-bottom: 1pt solid windowtext; border-left: 1pt solid windowtext; border-top: none; padding: 0.75pt 0.75pt 0cm; height: 25.0125px; box-sizing: border-box;">'
                     f'<p class="MsoListParagraph" style="margin: 0cm 0cm 0cm 21pt; font-size: 16px; font-family: SimSun, 宋体;"><b><span style="font-size: 14px;">{name}</span></b></p>'
                     f'</td>'
-                    f'<td style="width: 67%; border-top: none; border-left: none; border-bottom: 1pt solid windowtext; border-right: 1pt solid windowtext; padding: 0cm; height: 25.0125px; box-sizing: border-box; word-break: break-word; white-space: normal;" colspan="2">'
+                    f'<td style="border-top: none; border-left: none; border-bottom: 1pt solid windowtext; border-right: 1pt solid windowtext; padding: 0cm; height: 25.0125px; box-sizing: border-box; word-break: break-word; white-space: normal;">'
                     f'<p class="MsoListParagraph" style="margin: 0cm 0cm 0cm 21pt; font-size: 16px; font-family: SimSun, 宋体;"><span style="font-size: 14px; color: #0077fa;">{email}</span></p>'
                     f'</td>'
                     '</tr>'
                 )
+            email_list_text = "；".join(e for _, e in email_rows)
             section5_html = (
                 '<p class="MsoListParagraph" style="margin: 12pt 0cm 6pt 57pt; font-size: 16px; font-family: SimSun, 宋体;">'
                 '<b><span style="font-size: 14px; color: #333;">5、报告中涉及的责任人邮箱：</span></b></p>'
@@ -371,15 +372,18 @@ def generate_email_from_report(
                 'style="border-collapse:collapse;font-size:16px;text-align:start;background-color:rgb(255,255,255);width:682.65pt;margin-left:61.25pt">'
                 '<tbody>'
                 '<tr>'
-                '<td style="width: 33%; border: 1pt solid windowtext; background: rgb(255, 192, 0); padding: 0.75pt 0.75pt 0cm; height: 24.2125px; box-sizing: border-box;" colspan="1">'
+                '<td style="width: 33.33%; border: 1pt solid windowtext; background: rgb(255, 192, 0); padding: 0.75pt 0.75pt 0cm; height: 24.2125px; box-sizing: border-box;">'
                 '<p class="MsoListParagraph" style="margin: 0cm 0cm 0cm 21pt; font-size: 16px; font-family: SimSun, 宋体;"><b><span style="font-size: 14px;">责任人</span></b></p>'
                 '</td>'
-                '<td style="width: 67%; border-top: 1pt solid windowtext; border-right: 1pt solid windowtext; border-bottom: 1pt solid windowtext; border-left: none; background: rgb(255, 192, 0); padding: 0cm; height: 24.2125px; box-sizing: border-box;" colspan="2">'
+                '<td style="width: 66.66%; border-top: 1pt solid windowtext; border-right: 1pt solid windowtext; border-bottom: 1pt solid windowtext; border-left: none; background: rgb(255, 192, 0); padding: 0.75pt 0.75pt 0cm; height: 24.2125px; box-sizing: border-box;">'
                 '<p class="MsoListParagraph" style="margin: 0cm 0cm 0cm 21pt; font-size: 16px; font-family: SimSun, 宋体;"><b><span style="font-size: 14px;">邮箱</span></b></p>'
                 '</td>'
                 '</tr>'
                 f'{rows_html}'
                 '</tbody></table>'
+                '<p class="MsoListParagraph" style="margin: 6pt 0cm 0cm 57pt; font-size: 14px; font-family: SimSun, 宋体;">'
+                f'<span style="color: #555;">复制：{email_list_text}</span>'
+                '</p>'
             )
             # Insert after section 4's table (tbSted1), before footer
             table1_end = template.find("</table>", template.find('id="tbSted1"'))
