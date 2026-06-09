@@ -29,9 +29,6 @@ export default function HistoryPage() {
   const [selectedEmails, setSelectedEmails] = useState<string[]>([])
   const [manualEmails, setManualEmails] = useState('')
   const [ccEmails, setCcEmails] = useState('')
-  const [reportOwnerEmails, setReportOwnerEmails] = useState<string[]>([])
-  const [reportOwners, setReportOwners] = useState<string[]>([])
-
   // Preview state
   const [previewVisible, setPreviewVisible] = useState(false)
   const [previewHtml, setPreviewHtml] = useState('')
@@ -77,8 +74,6 @@ export default function HistoryPage() {
   const handleOpenEmailModal = async (batchCode: string) => {
     setSelectedBatch(batchCode)
     setSelectedEmails([])
-    setReportOwnerEmails([])
-    setReportOwners([])
     // Load default recipients from email settings
     try {
       const res = await api.get('/api/email/settings')
@@ -88,16 +83,6 @@ export default function HistoryPage() {
     } catch {
       setManualEmails('')
       setCcEmails('')
-    }
-    // Load report owner emails
-    try {
-      const res = await api.get(`/api/email/report-owners/${batchCode}`)
-      setReportOwnerEmails(res.data.emails || [])
-      setReportOwners(res.data.owners || [])
-      // Auto-select report owner emails
-      setSelectedEmails(res.data.emails || [])
-    } catch {
-      // ignore
     }
     setEmailModalVisible(true)
   }
@@ -249,26 +234,6 @@ export default function HistoryPage() {
         }
         style={{ width: 640 }}
       >
-        {reportOwnerEmails.length > 0 && (
-          <div style={{ marginBottom: 16, padding: 12, background: '#f6ffed', borderRadius: 8, border: '1px solid #b7eb8f' }}>
-            <Text strong style={{ display: 'block', marginBottom: 8, color: '#52c41a' }}>
-              本报告涉及的责任人邮箱（已自动选中，可直接复制）：
-            </Text>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
-              {reportOwnerEmails.map((email, i) => (
-                <Tag key={email} color="green">{reportOwners[i] || email}</Tag>
-              ))}
-            </div>
-            <TextArea
-              rows={2}
-              value={reportOwnerEmails.join('; ')}
-              readonly
-              onClick={(e: any) => e.target?.select()}
-              style={{ fontSize: 13, fontFamily: 'monospace' }}
-            />
-          </div>
-        )}
-
         <div style={{ marginBottom: 16 }}>
           <Text strong style={{ display: 'block', marginBottom: 8 }}>从责任人邮箱选择：</Text>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
