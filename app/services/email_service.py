@@ -381,10 +381,11 @@ def generate_email_from_report(
                 f'{rows_html}'
                 '</tbody></table>'
             )
-            # Insert before the last </div> or at the end
-            last_div = template.rfind("</div>")
-            if last_div > 0:
-                template = template[:last_div] + section5_html + template[last_div:]
+            # Insert after section 4's table (tbSted1), before footer
+            table1_end = template.find("</table>", template.find('id="tbSted1"'))
+            if table1_end > 0:
+                insert_pos = table1_end + 8  # after </table>
+                template = template[:insert_pos] + section5_html + template[insert_pos:]
             else:
                 template += section5_html
 
