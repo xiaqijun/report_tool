@@ -55,6 +55,7 @@ def generate_email_from_report(
     prev_protection_interrupted: list[dict] | None = None,
     prev_agent_missing: list[dict] | None = None,
     prev_online_unprotected: list[dict] | None = None,
+    owner_emails: dict[str, str] | None = None,
 ) -> str:
     """
     Generate email HTML from report data using the original template format.
@@ -346,6 +347,28 @@ def generate_email_from_report(
                     end_idx = marker_idx + 1
             template = template[:compare_idx] + new_text + template[end_idx:]
 
+    # Section 5: Owner emails for easy copying
+    if owner_emails:
+        email_lines = []
+        for name, email in owner_emails.items():
+            if email:
+                email_lines.append(f"{email}")
+        if email_lines:
+            email_list = "；".join(email_lines)
+            section5_html = (
+                '<p class="MsoListParagraph" style="margin: 12pt 0cm 0cm 57pt; font-size: 16px; font-family: SimSun, 宋体;">'
+                '<b><span style="font-size: 14px; color: #333;">5、报告中涉及的责任人邮箱：</span></b></p>'
+                '<p class="MsoListParagraph" style="margin: 6pt 0cm 0cm 93pt; font-size: 14px; font-family: SimSun, 宋体;">'
+                f'<span style="color: #555; word-break: break-all;">{email_list}</span>'
+                '</p>'
+            )
+            # Insert before the last </div> or at the end
+            last_div = template.rfind("</div>")
+            if last_div > 0:
+                template = template[:last_div] + section5_html + template[last_div:]
+            else:
+                template += section5_html
+
     return template
 
 
@@ -479,6 +502,7 @@ def send_warning_email(
     smtp_config: dict | None = None,
     custom_subject: str | None = None,
     attachments: list[dict] | None = None,
+    owner_emails: dict[str, str] | None = None,
 ) -> dict:
     """Send host security warning email with week-over-week comparison."""
     try:
@@ -529,6 +553,7 @@ def send_warning_email(
             prev_protection_interrupted=prev_pi,
             prev_agent_missing=prev_am,
             prev_online_unprotected=prev_ou,
+            owner_emails=owner_emails,
         )
 
         from datetime import datetime

@@ -615,6 +615,19 @@ async def api_preview_email(request: Request):
         date_part = batch_code[:8]
         report_date = f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:8]}"
 
+    # Collect owner emails from the report data
+    owner_names = set()
+    for data_list in [current_data["protection_interrupted"], current_data["agent_missing"], current_data["online_unprotected"]]:
+        for item in data_list:
+            name = str(item.get("负责人", "")).strip()
+            if name and name not in ("合计", "总计"):
+                owner_names.add(name)
+    owner_emails_lookup = {}
+    if owner_names:
+        emails = db.get_owner_emails_by_names(list(owner_names))
+        for name, email in zip(sorted(owner_names), emails):
+            owner_emails_lookup[name] = email
+
     html = generate_email_from_report(
         report_date=report_date,
         protection_interrupted=current_data["protection_interrupted"],
@@ -624,6 +637,7 @@ async def api_preview_email(request: Request):
         prev_protection_interrupted=prev_data["protection_interrupted"],
         prev_agent_missing=prev_data["agent_missing"],
         prev_online_unprotected=prev_data["online_unprotected"],
+        owner_emails=owner_emails_lookup if owner_emails_lookup else None,
     )
 
     return {"html": html}
@@ -760,6 +774,19 @@ async def api_send_warning_email(request: Request):
             if fp.exists():
                 attachments.append({"path": str(fp), "filename": fp.name})
 
+    # Collect owner emails from the report data
+    owner_names = set()
+    for data_list in [current_data["protection_interrupted"], current_data["agent_missing"], current_data["online_unprotected"]]:
+        for item in data_list:
+            name = str(item.get("负责人", "")).strip()
+            if name and name not in ("合计", "总计"):
+                owner_names.add(name)
+    owner_emails_lookup = {}
+    if owner_names:
+        emails = db.get_owner_emails_by_names(list(owner_names))
+        for name, email in zip(sorted(owner_names), emails):
+            owner_emails_lookup[name] = email
+
     result = send_warning_email(
         to_list=to_list,
         report_date=report_date,
@@ -770,6 +797,7 @@ async def api_send_warning_email(request: Request):
         smtp_config=email_settings,
         custom_subject=email_settings.get("host_warning_subject") if email_settings else None,
         attachments=attachments if attachments else None,
+        owner_emails=owner_emails_lookup if owner_emails_lookup else None,
     )
 
     return result
