@@ -367,9 +367,9 @@ def generate_email_from_report(
                 )
             email_list_text = "；".join(e for _, e in email_rows)
             section5_html = (
-                '<p class="MsoListParagraph" style="margin: 0cm 0cm 0cm 57pt; text-indent: -36pt; font-size: 16px; font-family: SimSun, 宋体;">'
-                '<b><span lang="EN-US" style="font-size: 14px; color: #333;">5、    </span></b>'
-                '<b><span style="font-size: 14px; color: #333;">责任人邮箱：</span></b></p>'
+                '<p class="MsoListParagraph" style="margin: 0cm 0cm 0cm 57pt; text-indent: -36pt; font-size: 16px; font-family: SimSun, 宋体, &quot;Songti SC&quot;, 宋体-简;">'
+                '<b>5、  </b>'
+                '<b>责任人邮箱：</b></p>'
                 '<table class="MsoNormalTable" border="0" cellspacing="0" cellpadding="0" width="910" '
                 'style="border-collapse:collapse;font-size:16px;text-align:start;background-color:rgb(255,255,255);width:676.1pt;margin-left:60.7pt">'
                 '<tbody>'
