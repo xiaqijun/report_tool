@@ -347,20 +347,39 @@ def generate_email_from_report(
                     end_idx = marker_idx + 1
             template = template[:compare_idx] + new_text + template[end_idx:]
 
-    # Section 5: Owner emails for easy copying
+    # Section 5: Owner emails table for easy copying
     if owner_emails:
-        email_lines = []
-        for name, email in owner_emails.items():
-            if email:
-                email_lines.append(f"{email}")
-        if email_lines:
-            email_list = "；".join(email_lines)
+        email_rows = [(name, email) for name, email in owner_emails.items() if email]
+        if email_rows:
+            email_rows.sort(key=lambda x: x[0])
+            rows_html = ""
+            for name, email in email_rows:
+                rows_html += (
+                    '<tr style="">'
+                    f'<td width="259" valign="top" style="width: 194.1pt; border-right: 1pt solid windowtext; border-bottom: 1pt solid windowtext; border-left: 1pt solid windowtext; border-top: none; padding: 0cm; height: 25.0125px; box-sizing: border-box;">'
+                    f'<p class="MsoListParagraph" style="margin: 0cm 0cm 0cm 21pt; font-size: 16px; font-family: SimSun, 宋体;"><b><span style="font-size: 14px; color: #333;">{name}</span></b></p>'
+                    f'</td>'
+                    f'<td width="651" colspan="2" valign="top" style="width: 488.25pt; border-top: none; border-left: none; border-bottom: 1pt solid windowtext; border-right: 1pt solid windowtext; padding: 0cm; height: 25.0125px; box-sizing: border-box;">'
+                    f'<p class="MsoListParagraph" style="margin: 0cm 0cm 0cm 21pt; font-size: 16px; font-family: SimSun, 宋体;"><span style="font-size: 14px; color: #0077fa;">{email}</span></p>'
+                    f'</td>'
+                    '</tr>'
+                )
             section5_html = (
-                '<p class="MsoListParagraph" style="margin: 12pt 0cm 0cm 57pt; font-size: 16px; font-family: SimSun, 宋体;">'
+                '<p class="MsoListParagraph" style="margin: 12pt 0cm 6pt 57pt; font-size: 16px; font-family: SimSun, 宋体;">'
                 '<b><span style="font-size: 14px; color: #333;">5、报告中涉及的责任人邮箱：</span></b></p>'
-                '<p class="MsoListParagraph" style="margin: 6pt 0cm 0cm 93pt; font-size: 14px; font-family: SimSun, 宋体;">'
-                f'<span style="color: #555; word-break: break-all;">{email_list}</span>'
-                '</p>'
+                '<table class="MsoNormalTable" border="0" cellspacing="0" cellpadding="0" width="910" '
+                'style="border-collapse:collapse;font-size:16px;text-align:start;background-color:rgb(255,255,255);width:682.65pt;margin-left:61.25pt">'
+                '<tbody>'
+                '<tr style="">'
+                '<td width="259" valign="top" style="width: 194.1pt; border: 1pt solid windowtext; background: rgb(217, 226, 243); padding: 0cm; height: 25.0125px; box-sizing: border-box;">'
+                '<p class="MsoListParagraph" style="margin: 0cm 0cm 0cm 21pt; font-size: 16px; font-family: SimSun, 宋体;"><b><span style="font-size: 14px;">责任人</span></b></p>'
+                '</td>'
+                '<td width="651" colspan="2" valign="top" style="width: 488.25pt; border: 1pt solid windowtext; background: rgb(217, 226, 243); padding: 0cm; height: 25.0125px; box-sizing: border-box;">'
+                '<p class="MsoListParagraph" style="margin: 0cm 0cm 0cm 21pt; font-size: 16px; font-family: SimSun, 宋体;"><b><span style="font-size: 14px;">邮箱</span></b></p>'
+                '</td>'
+                '</tr>'
+                f'{rows_html}'
+                '</tbody></table>'
             )
             # Insert before the last </div> or at the end
             last_div = template.rfind("</div>")
