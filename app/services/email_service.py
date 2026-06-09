@@ -312,13 +312,10 @@ def generate_email_from_report(
         if idx2 >= 0:
             compare_idx = template.find('与上周相比较', idx2)
             if compare_idx >= 0:
-                end_markers = ['台', '，']
-                end_idx = len(template)
-                for marker in end_markers:
-                    marker_idx = template.find(marker, compare_idx + 10)
-                    if marker_idx > 0 and marker_idx < end_idx:
-                        end_idx = marker_idx + 1
-                template = template[:compare_idx] + new_text + template[end_idx:]
+                marker_idx = template.find('台', compare_idx + 10)
+                if marker_idx > 0:
+                    end_idx = marker_idx + 1
+                    template = template[:compare_idx] + new_text + template[end_idx:]
 
         # Section 3: online unprotected
         unquota_change = visible_week_changes.get("online_unprotected", 0)
@@ -341,10 +338,9 @@ def generate_email_from_report(
         if len(all_positions) >= 2:
             compare_idx = all_positions[-1]
             end_idx = len(template)
-            for marker in ['台', '，']:
-                marker_idx = template.find(marker, compare_idx + 10)
-                if marker_idx > 0 and marker_idx < end_idx:
-                    end_idx = marker_idx + 1
+            marker_idx = template.find('台', compare_idx + 10)
+            if marker_idx > 0:
+                end_idx = marker_idx + 1
             template = template[:compare_idx] + new_text + template[end_idx:]
 
     # Section 5: Owner emails table (matching the style of tables above)
