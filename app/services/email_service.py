@@ -371,7 +371,7 @@ def generate_email_from_report(
                 '<span lang="EN-US" style="font-family: &quot;Microsoft YaHei&quot;, 微软雅黑, sans-serif, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, 苹方-简;">5</span>'
                 '<span style="font-family: &quot;Microsoft YaHei&quot;, 微软雅黑, sans-serif, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, 苹方-简;">、  责任人邮箱：</span></p>'
                 '<table class="MsoNormalTable" border="0" cellspacing="0" cellpadding="0" width="910" '
-                'style="border-collapse:collapse;font-size:16px;text-align:start;background-color:rgb(255,255,255);width:676.1pt;margin-left:60.7pt">'
+                'style="border-collapse:collapse;font-size:16px;text-align:center;background-color:rgb(255,255,255);width:676.1pt;margin-left:60.7pt">'
                 '<tbody>'
                 '<tr>'
                 '<td style="width: 50%; border: 1pt solid windowtext; background: rgb(255, 192, 0); padding: 0.75pt 0.75pt 0cm; height: 24.2125px; box-sizing: border-box;">'
