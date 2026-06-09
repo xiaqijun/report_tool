@@ -349,7 +349,8 @@ def generate_email_from_report(
 
     # Section 5: Owner emails table (matching the style of tables above)
     if owner_emails:
-        email_rows = [(name, email) for name, email in owner_emails.items() if email]
+        clean = lambda e: e.strip().rstrip(";；").strip()
+        email_rows = [(name, clean(email)) for name, email in owner_emails.items() if email and clean(email)]
         if email_rows:
             email_rows.sort(key=lambda x: x[0])
             rows_html = ""
@@ -360,7 +361,7 @@ def generate_email_from_report(
                     f'<p class="MsoListParagraph" style="margin: 0cm 0cm 0cm 21pt; font-size: 16px; font-family: SimSun, 宋体;"><b><span style="font-size: 14px;">{name}</span></b></p>'
                     f'</td>'
                     f'<td style="border-top: none; border-left: none; border-bottom: 1pt solid windowtext; border-right: 1pt solid windowtext; padding: 0cm; height: 25.0125px; box-sizing: border-box; word-break: break-word; white-space: normal;">'
-                    f'<p class="MsoListParagraph" style="margin: 0cm 0cm 0cm 21pt; font-size: 16px; font-family: SimSun, 宋体;"><span style="font-size: 14px; color: #0077fa;">{email}</span></p>'
+                    f'<p class="MsoListParagraph" style="margin: 0cm 0cm 0cm 21pt; font-size: 16px; font-family: SimSun, 宋体;"><span style="font-size: 14px;">{email}</span></p>'
                     f'</td>'
                     '</tr>'
                 )
