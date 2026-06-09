@@ -367,7 +367,7 @@ def generate_email_from_report(
                 )
             email_list_text = "；".join(e for _, e in email_rows)
             section5_html = (
-                '<p class="MsoListParagraph" style="margin: 0cm 0cm 0cm 57pt; font-size: 16px; font-family: SimSun, 宋体, &quot;Songti SC&quot;, 宋体-简, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, 苹方-简, &quot;Microsoft YaHei&quot;, 微软雅黑, sans-serif; background-color: rgb(255, 255, 255); text-align: justify; text-indent: -36pt; line-height: 1.43;" paragraph-line-height-multiple="1">'
+                '<p class="MsoListParagraph" style="margin: 6pt 0cm 6pt 57pt; font-size: 16px; font-family: SimSun, 宋体, &quot;Songti SC&quot;, 宋体-简, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, 苹方-简, &quot;Microsoft YaHei&quot;, 微软雅黑, sans-serif; background-color: rgb(255, 255, 255); text-align: justify; text-indent: -36pt; line-height: 1.43;" paragraph-line-height-multiple="1">'
                 '<span lang="EN-US" style="font-family: &quot;Microsoft YaHei&quot;, 微软雅黑, sans-serif, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, 苹方-简;">5</span>'
                 '<span style="font-family: &quot;Microsoft YaHei&quot;, 微软雅黑, sans-serif, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, 苹方-简;">、</span>'
                 '<span lang="EN-US" style="font-size: 7pt; font-family: &quot;Times New Roman&quot;, serif, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, 苹方-简, &quot;Microsoft YaHei&quot;, 微软雅黑, sans-serif;">&nbsp;&nbsp;&nbsp; &nbsp; </span>'
