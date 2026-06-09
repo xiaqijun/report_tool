@@ -191,7 +191,7 @@ def generate_email_from_report(
                     arrow_img = f'<img src="{arrow_down_src}" style="width: 14px; height: 24px; vertical-align: bottom; border: none; max-height: unset;" />'
                     return f'<span style="color:green">{arrow_img}{abs(change)}台</span>'
                 return f'<span style="color:green">↓{abs(change)}台</span>'
-            return "--"
+            return "<b>--</b>"
 
         # Helper: get count from a data item (supports both aggregated and raw formats)
         def _get_count(item):
