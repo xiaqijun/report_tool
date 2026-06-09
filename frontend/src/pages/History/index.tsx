@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Table, Button, Input, Toast, Popconfirm, Typography, Modal, Tag, Space, TextArea, Spin } from '@douyinfe/semi-ui'
+import { Table, Button, Input, Toast, Popconfirm, Typography, Modal, Space, TextArea, Spin } from '@douyinfe/semi-ui'
 import { IconSearch, IconDelete, IconDownload, IconMail } from '@douyinfe/semi-icons'
 import api from '../../api'
 
@@ -25,8 +25,6 @@ export default function HistoryPage() {
   const [emailModalVisible, setEmailModalVisible] = useState(false)
   const [sending, setSending] = useState(false)
   const [selectedBatch, setSelectedBatch] = useState<string>('')
-  const [ownerEmails, setOwnerEmails] = useState<any[]>([])
-  const [selectedEmails, setSelectedEmails] = useState<string[]>([])
   const [manualEmails, setManualEmails] = useState('')
   const [ccEmails, setCcEmails] = useState('')
   // Preview state
@@ -49,17 +47,7 @@ export default function HistoryPage() {
 
   useEffect(() => {
     fetchData()
-    fetchOwnerEmails()
   }, [])
-
-  const fetchOwnerEmails = async () => {
-    try {
-      const response = await api.get('/api/admin/owner-emails', { params: { page: 1 } })
-      setOwnerEmails(response.data.records || [])
-    } catch {
-      // ignore
-    }
-  }
 
   const handleDelete = async (batchCode: string) => {
     try {
@@ -73,7 +61,6 @@ export default function HistoryPage() {
 
   const handleOpenEmailModal = async (batchCode: string) => {
     setSelectedBatch(batchCode)
-    setSelectedEmails([])
     // Load default recipients from email settings
     try {
       const res = await api.get('/api/email/settings')
@@ -102,16 +89,12 @@ export default function HistoryPage() {
   }
 
   const handleSendEmail = async () => {
-    const allEmails = [...selectedEmails]
-    if (manualEmails.trim()) {
-      const manual = manualEmails
-        .split(/[,;，；\n]+/)
-        .map((e) => e.trim())
-        .filter((e) => e && e.includes('@'))
-      allEmails.push(...manual)
-    }
-
-    const uniqueEmails = [...new Set(allEmails)]
+    const uniqueEmails = manualEmails
+      ? manualEmails
+          .split(/[,;，；\n]+/)
+          .map((e) => e.trim())
+          .filter((e) => e && e.includes('@'))
+      : []
 
     if (uniqueEmails.length === 0) {
       Toast.warning('请至少输入一个收件人')
@@ -143,12 +126,6 @@ export default function HistoryPage() {
     } finally {
       setSending(false)
     }
-  }
-
-  const toggleOwnerEmail = (email: string) => {
-    setSelectedEmails((prev) =>
-      prev.includes(email) ? prev.filter((e) => e !== email) : [...prev, email]
-    )
   }
 
   const columns = [
@@ -235,31 +212,7 @@ export default function HistoryPage() {
         style={{ width: 640 }}
       >
         <div style={{ marginBottom: 16 }}>
-          <Text strong style={{ display: 'block', marginBottom: 8 }}>从责任人邮箱选择：</Text>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-            {ownerEmails.length > 0 ? (
-              ownerEmails.map((item) => (
-                <Tag
-                  key={item.email}
-                  style={{
-                    cursor: 'pointer',
-                    border: selectedEmails.includes(item.email) ? '1px solid #0077fa' : '1px solid #d9d9d9',
-                    backgroundColor: selectedEmails.includes(item.email) ? '#e6f4ff' : '#fff',
-                    color: selectedEmails.includes(item.email) ? '#0077fa' : '#333',
-                  }}
-                  onClick={() => toggleOwnerEmail(item.email)}
-                >
-                  {item.owner_name || item.email}
-                </Tag>
-              ))
-            ) : (
-              <Text type="secondary">暂无责任人邮箱数据</Text>
-            )}
-          </div>
-        </div>
-
-        <div style={{ marginBottom: 16 }}>
-          <Text strong style={{ display: 'block', marginBottom: 8 }}>手动输入收件人：</Text>
+          <Text strong style={{ display: 'block', marginBottom: 8 }}>收件人：</Text>
           <TextArea
             placeholder="输入邮箱地址，多个用逗号、分号或换行分隔"
             rows={3}
