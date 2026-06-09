@@ -320,12 +320,16 @@ def generate_email_from_report(
         # Section 3: online unprotected
         unquota_change = visible_week_changes.get("online_unprotected", 0)
         if unquota_change > 0:
+            old_pattern = r'与上周相比增加[^，台]*台'
             new_text = f"与上周相比增加<b><span lang=\"EN-US\" style=\"color:red\">{unquota_change}</span></b>台"
         elif unquota_change < 0:
+            old_pattern = r'与上周相比减少[^，台]*台'
             new_text = f"与上周相比减少<b><span lang=\"EN-US\" style=\"color:red\">{abs(unquota_change)}</span></b>台"
         else:
+            old_pattern = r'与上周相比无变化'
             new_text = "与上周相比无变化"
-
+        
+        # Find the LAST occurrence (section 4)
         all_positions = []
         idx = 0
         while True:
@@ -334,15 +338,13 @@ def generate_email_from_report(
                 break
             all_positions.append(idx)
             idx += 10
-
+        
         if len(all_positions) >= 2:
             compare_idx = all_positions[-1]
-            # Find end of comparison: try '台' first (for has-change), then '，' (for no-change)
-            end_idx = template.find('台', compare_idx + 10)
-            if end_idx < 0:
-                end_idx = template.find('，', compare_idx + 10)
-            if end_idx > 0:
-                template = template[:compare_idx] + new_text + template[end_idx + 1:]
+            # Use regex to replace only the comparison phrase, preserving everything after
+            snippet = template[compare_idx:]
+            snippet = re.sub(old_pattern, new_text, snippet, count=1)
+            template = template[:compare_idx] + snippet
 
     # Section 5: Owner emails table (matching the style of tables above)
     if owner_emails:
