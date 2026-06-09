@@ -231,9 +231,6 @@ export default function HistoryPage() {
           />
         </div>
 
-        <Text type="secondary">
-          邮件将自动对比一周前的数据，生成"同上周相比"的变化统计。
-        </Text>
       </Modal>
 
       {/* 邮件预览弹窗 */}
