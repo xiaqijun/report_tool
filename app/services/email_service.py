@@ -281,41 +281,42 @@ def generate_email_from_report(
         # Section 1: protection interrupted
         interrupted_change = visible_week_changes.get("protection_interrupted", 0)
         if interrupted_change > 0:
+            old_pattern1 = r'与上周相比较增加[^，台]*台'
             new_text = f"与上周相比较增加<b><span lang=\"EN-US\" style=\"color:red\">{interrupted_change}</span></b>台"
         elif interrupted_change < 0:
+            old_pattern1 = r'与上周相比较服务器台数减少[^，台]*台'
             new_text = f"与上周相比较服务器台数减少<b><span lang=\"EN-US\" style=\"color:red\">{abs(interrupted_change)}</span></b>台"
         else:
+            old_pattern1 = r'与上周相比较(服务器台数减少[^，台]*台|增加[^，台]*台)'
             new_text = "与上周相比无变化"
 
         idx1 = template.find('与上周相比较服务器台数减少')
-        if idx1 >= 0:
-            end_idx = template.find('台', idx1 + 10)
-            if end_idx > 0:
-                template = template[:idx1] + new_text + template[end_idx + 1:]
-        else:
+        if idx1 < 0:
             idx1 = template.find('与上周相比较增加')
-            if idx1 >= 0:
-                end_idx = template.find('台', idx1 + 10)
-                if end_idx > 0:
-                    template = template[:idx1] + new_text + template[end_idx + 1:]
+        if idx1 >= 0:
+            snippet = template[idx1:]
+            snippet = re.sub(old_pattern1, new_text, snippet, count=1)
+            template = template[:idx1] + snippet
 
         # Section 2: agent missing
         missing_change = visible_week_changes.get("agent_missing", 0)
         if missing_change > 0:
+            old_pattern2 = r'与上周相比较增加[^，台]*台'
             new_text = f"与上周相比较增加<b><span lang=\"EN-US\" style=\"color:red\">{missing_change}</span></b>台"
         elif missing_change < 0:
+            old_pattern2 = r'与上周相比较减少[^，台]*台'
             new_text = f"与上周相比较减少<b><span lang=\"EN-US\" style=\"color:red\">{abs(missing_change)}</span></b>台"
         else:
+            old_pattern2 = r'与上周相比较无变化'
             new_text = "与上周相比无变化"
 
         idx2 = template.find('刨除暂不安装的剩余')
         if idx2 >= 0:
             compare_idx = template.find('与上周相比较', idx2)
             if compare_idx >= 0:
-                marker_idx = template.find('台', compare_idx + 10)
-                if marker_idx > 0:
-                    end_idx = marker_idx + 1
-                    template = template[:compare_idx] + new_text + template[end_idx:]
+                snippet = template[compare_idx:]
+                snippet = re.sub(old_pattern2, new_text, snippet, count=1)
+                template = template[:compare_idx] + snippet
 
         # Section 3: online unprotected
         unquota_change = visible_week_changes.get("online_unprotected", 0)
