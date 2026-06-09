@@ -337,11 +337,12 @@ def generate_email_from_report(
 
         if len(all_positions) >= 2:
             compare_idx = all_positions[-1]
-            end_idx = len(template)
-            marker_idx = template.find('台', compare_idx + 10)
-            if marker_idx > 0:
-                end_idx = marker_idx + 1
-            template = template[:compare_idx] + new_text + template[end_idx:]
+            # Find end of comparison: try '台' first (for has-change), then '，' (for no-change)
+            end_idx = template.find('台', compare_idx + 10)
+            if end_idx < 0:
+                end_idx = template.find('，', compare_idx + 10)
+            if end_idx > 0:
+                template = template[:compare_idx] + new_text + template[end_idx + 1:]
 
     # Section 5: Owner emails table (matching the style of tables above)
     if owner_emails:
