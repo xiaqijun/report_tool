@@ -369,7 +369,9 @@ def generate_email_from_report(
             section5_html = (
                 '<p class="MsoListParagraph" style="margin: 0cm 0cm 0cm 57pt; font-size: 16px; font-family: SimSun, 宋体, &quot;Songti SC&quot;, 宋体-简, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, 苹方-简, &quot;Microsoft YaHei&quot;, 微软雅黑, sans-serif; background-color: rgb(255, 255, 255); text-align: justify; text-indent: -36pt; line-height: 1.43;" paragraph-line-height-multiple="1">'
                 '<span lang="EN-US" style="font-family: &quot;Microsoft YaHei&quot;, 微软雅黑, sans-serif, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, 苹方-简;">5</span>'
-                '<span style="font-family: &quot;Microsoft YaHei&quot;, 微软雅黑, sans-serif, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, 苹方-简;">、  责任人邮箱：</span></p>'
+                '<span style="font-family: &quot;Microsoft YaHei&quot;, 微软雅黑, sans-serif, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, 苹方-简;">、</span>'
+                '<span lang="EN-US" style="font-size: 7pt; font-family: &quot;Times New Roman&quot;, serif, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, 苹方-简, &quot;Microsoft YaHei&quot;, 微软雅黑, sans-serif;">&nbsp;&nbsp;&nbsp; &nbsp; </span>'
+                '<span style="font-family: &quot;Microsoft YaHei&quot;, 微软雅黑, sans-serif, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, 苹方-简;">责任人邮箱：</span></p>'
                 '<table class="MsoNormalTable" border="0" cellspacing="0" cellpadding="0" width="910" '
                 'style="border-collapse:collapse;font-size:16px;text-align:center;background-color:rgb(255,255,255);width:676.1pt;margin-left:60.7pt">'
                 '<tbody>'

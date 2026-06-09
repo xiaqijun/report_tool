@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "aipy": {
+      "command": "uv",
+      "args": ["run", "--directory", "E:/github/aipy-mcp-server", "python", "server.py"]
+    }
+  }
+}

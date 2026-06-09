@@ -4,7 +4,19 @@
       "Bash(git -C \"e:\\\\github\\\\report_tool\" log --oneline -10)",
       "Bash(uv run python -c ' *)",
       "Bash(git add *)",
-      "Bash(git commit -m 'feat: 优化日报表单和资产清单生成功能 *)"
+      "Bash(git commit -m 'feat: 优化日报表单和资产清单生成功能 *)",
+      "Bash(git commit -m 'fix: 邮件表格列宽改为等宽 33%/33%/34% *)",
+      "Bash(npm run *)",
+      "Bash(git commit -m 'feat: 新增「设置」菜单栏，邮件配置移至设置中 *)",
+      "Bash(git commit -m 'feat: 邮件主题按模块分开配置 *)",
+      "Bash(git commit -m 'feat: 邮件主题支持 {date} 占位符自动替换为日期 *)",
+      "Bash(git commit -m 'fix: 邮件日期格式改为 2026年06月08日 格式 *)",
+      "Bash(git commit -m 'feat: 主机预警邮件自动附加三个结果文件 *)",
+      "Bash(git commit -m 'fix: 邮件附件使用文件原名 *)",
+      "mcp__aipy__aipy_run",
+      "mcp__aipy__aipy_python",
+      "mcp__aipy__list_tools",
+      "mcp__aipy__call_tool"
     ]
   }
 }
