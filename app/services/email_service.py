@@ -347,7 +347,7 @@ def generate_email_from_report(
                     end_idx = marker_idx + 1
             template = template[:compare_idx] + new_text + template[end_idx:]
 
-    # Section 5: Owner emails table for easy copying
+    # Section 5: Owner emails table (matching the style of tables above)
     if owner_emails:
         email_rows = [(name, email) for name, email in owner_emails.items() if email]
         if email_rows:
@@ -355,11 +355,11 @@ def generate_email_from_report(
             rows_html = ""
             for name, email in email_rows:
                 rows_html += (
-                    '<tr style="">'
-                    f'<td width="259" valign="top" style="width: 194.1pt; border-right: 1pt solid windowtext; border-bottom: 1pt solid windowtext; border-left: 1pt solid windowtext; border-top: none; padding: 0cm; height: 25.0125px; box-sizing: border-box;">'
-                    f'<p class="MsoListParagraph" style="margin: 0cm 0cm 0cm 21pt; font-size: 16px; font-family: SimSun, 宋体;"><b><span style="font-size: 14px; color: #333;">{name}</span></b></p>'
+                    '<tr>'
+                    f'<td style="width: 33%; border-right: 1pt solid windowtext; border-bottom: 1pt solid windowtext; border-left: 1pt solid windowtext; border-top: none; padding: 0.75pt 0.75pt 0cm; height: 25.0125px; box-sizing: border-box;" colspan="1">'
+                    f'<p class="MsoListParagraph" style="margin: 0cm 0cm 0cm 21pt; font-size: 16px; font-family: SimSun, 宋体;"><b><span style="font-size: 14px;">{name}</span></b></p>'
                     f'</td>'
-                    f'<td width="651" colspan="2" valign="top" style="width: 488.25pt; border-top: none; border-left: none; border-bottom: 1pt solid windowtext; border-right: 1pt solid windowtext; padding: 0cm; height: 25.0125px; box-sizing: border-box;">'
+                    f'<td style="width: 67%; border-top: none; border-left: none; border-bottom: 1pt solid windowtext; border-right: 1pt solid windowtext; padding: 0cm; height: 25.0125px; box-sizing: border-box; word-break: break-word; white-space: normal;" colspan="2">'
                     f'<p class="MsoListParagraph" style="margin: 0cm 0cm 0cm 21pt; font-size: 16px; font-family: SimSun, 宋体;"><span style="font-size: 14px; color: #0077fa;">{email}</span></p>'
                     f'</td>'
                     '</tr>'
@@ -370,11 +370,11 @@ def generate_email_from_report(
                 '<table class="MsoNormalTable" border="0" cellspacing="0" cellpadding="0" width="910" '
                 'style="border-collapse:collapse;font-size:16px;text-align:start;background-color:rgb(255,255,255);width:682.65pt;margin-left:61.25pt">'
                 '<tbody>'
-                '<tr style="">'
-                '<td width="259" valign="top" style="width: 194.1pt; border: 1pt solid windowtext; background: rgb(217, 226, 243); padding: 0cm; height: 25.0125px; box-sizing: border-box;">'
+                '<tr>'
+                '<td style="width: 33%; border: 1pt solid windowtext; background: rgb(255, 192, 0); padding: 0.75pt 0.75pt 0cm; height: 24.2125px; box-sizing: border-box;" colspan="1">'
                 '<p class="MsoListParagraph" style="margin: 0cm 0cm 0cm 21pt; font-size: 16px; font-family: SimSun, 宋体;"><b><span style="font-size: 14px;">责任人</span></b></p>'
                 '</td>'
-                '<td width="651" colspan="2" valign="top" style="width: 488.25pt; border: 1pt solid windowtext; background: rgb(217, 226, 243); padding: 0cm; height: 25.0125px; box-sizing: border-box;">'
+                '<td style="width: 67%; border-top: 1pt solid windowtext; border-right: 1pt solid windowtext; border-bottom: 1pt solid windowtext; border-left: none; background: rgb(255, 192, 0); padding: 0cm; height: 24.2125px; box-sizing: border-box;" colspan="2">'
                 '<p class="MsoListParagraph" style="margin: 0cm 0cm 0cm 21pt; font-size: 16px; font-family: SimSun, 宋体;"><b><span style="font-size: 14px;">邮箱</span></b></p>'
                 '</td>'
                 '</tr>'
