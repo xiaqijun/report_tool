@@ -63,9 +63,12 @@ def generate_from_asset_file(file_path: Path | BytesIO, operator_name: str, orig
     protection_interrupted: list[dict[str, str]] = []
 
     for row in standardized_rows:
-        owner = owner_mapping.get(row["企业项目"].strip(), "")
-        if row["企业项目"].strip() and not owner:
-            missing_owner_projects.add(row["企业项目"].strip())
+        project = row["企业项目"].strip()
+        owner = owner_mapping.get(project)
+        if project and not owner:
+            missing_owner_projects.add(project)
+            owner = "翟召宁"
+        owner = owner or ""
 
         output_row = {column: row.get(column, "") for column in OUTPUT_COLUMNS if column != "负责人"}
         output_row["负责人"] = owner

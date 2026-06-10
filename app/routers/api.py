@@ -574,7 +574,7 @@ async def api_preview_email(request: Request):
 
     # Find the record closest to 7 days ago for comparison
     week_changes = None
-    prev_data = {"protection_interrupted": [], "agent_missing": [], "online_unprotected": []}
+    prev_data = {"protection_interrupted": None, "agent_missing": None, "online_unprotected": None}
     try:
         records, _ = db.list_result_histories(page=1, page_size=100)
         current_time = datetime.fromisoformat(current_record["created_at"].replace("Z", "+00:00")) if "T" in current_record["created_at"] else datetime.strptime(current_record["created_at"][:19], "%Y-%m-%dT%H:%M:%S")
@@ -723,7 +723,7 @@ async def api_send_warning_email(request: Request):
 
     # Find the record closest to 7 days ago for comparison
     previous_data = None
-    prev_data_files = {"protection_interrupted": [], "agent_missing": [], "online_unprotected": []}
+    prev_data_files = {"protection_interrupted": None, "agent_missing": None, "online_unprotected": None}
     try:
         records, _ = db.list_result_histories(page=1, page_size=100)
         current_time = datetime.fromisoformat(current_record["created_at"].replace("Z", "+00:00")) if "T" in current_record["created_at"] else datetime.strptime(current_record["created_at"][:19], "%Y-%m-%dT%H:%M:%S")

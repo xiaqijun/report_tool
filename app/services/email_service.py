@@ -42,6 +42,11 @@ def _load_embedded_template() -> str:
         return match.group(0)
 
     template = re.sub(r'src="cid:([^"]+)"', replace_cid, template)
+    # Truncate footer: remove everything after the last </table> (tbSted1 close)
+    # This removes spacers, Huawei logo, team info, and confidentiality disclaimer
+    last_table_close = template.rfind('</table>')
+    if last_table_close >= 0:
+        template = template[:last_table_close + 8]  # keep the </table>
     return template
 
 
@@ -62,6 +67,9 @@ def generate_email_from_report(
     Preserves the original HTML structure and only replaces data values.
     """
     template = _load_embedded_template()
+
+    # Apply consistent paragraph spacing (6pt before/after) to all MsoListParagraph
+    template = template.replace('margin: 0cm 0cm 0cm ', 'margin: 6pt 0cm 6pt ')
 
     # Extract totals from data
     def extract_total(data_list):
@@ -183,12 +191,12 @@ def generate_email_from_report(
         def make_comp_text(change):
             if change > 0:
                 if arrow_up_src:
-                    arrow_img = f'<img src="{arrow_up_src}" style="width: 12px; height: 21px; vertical-align: bottom; border: none; max-height: unset;" />'
+                    arrow_img = f'<img src="{arrow_up_src}" style="width: 10px; height: 18px; vertical-align: -2px; border: none; max-height: unset;" />'
                     return f'<span style="color:red">{arrow_img}{change}台</span>'
                 return f'<span style="color:red">↑{change}台</span>'
             elif change < 0:
                 if arrow_down_src:
-                    arrow_img = f'<img src="{arrow_down_src}" style="width: 14px; height: 24px; vertical-align: bottom; border: none; max-height: unset;" />'
+                    arrow_img = f'<img src="{arrow_down_src}" style="width: 10px; height: 18px; vertical-align: middle; border: none; max-height: unset;" />'
                     return f'<span style="color:green">{arrow_img}{abs(change)}台</span>'
                 return f'<span style="color:green">↓{abs(change)}台</span>'
             return "<b>--</b>"
@@ -235,11 +243,17 @@ def generate_email_from_report(
         # Generate data rows for all names, sorted by current count descending
         data_rows_html = []
         total_change = 0
+        total_new = 0      # sum of positive changes (新增)
+        total_dropped = 0  # sum of negative changes (减少)
         for name in sorted(all_names, key=lambda n: (-cur_lookup.get(n, 0), n)):
             count = cur_lookup.get(name, 0)
             prev_count = prev_lookup.get(name, 0)
             change = count - prev_count
             total_change += change
+            if change > 0:
+                total_new += change
+            elif change < 0:
+                total_dropped += abs(change)
 
             comp_text = make_comp_text(change)
             row_html = f'<tr>{td_templates[0][0]}{name}{td_templates[0][1]}'
@@ -259,78 +273,65 @@ def generate_email_from_report(
         table_attrs = table_full[:table_full.find('>') + 1]
         new_table = f'{table_attrs}<tbody>{new_table_content}</tbody></table>'
 
-        return html[:table_start] + new_table + html[table_end + 8:], total_change
+        return html[:table_start] + new_table + html[table_end + 8:], {
+            "net_change": total_change,
+            "new_additions": total_new,
+            "reductions": total_dropped,
+        }
 
     # Update each table with data and week-over-week comparison
     # tbSted0 = 防护状态中断 (Protection Interrupted)
     # tbSted_agent = Agent缺失 / 未安装Agent (Agent Missing)
     # tbSted1 = 在线未防护 / 未配置配额 (Online Unprotected)
-    template, visible_interrupted = update_table_data(template, "tbSted0", protection_interrupted, interrupted_total, prev_protection_interrupted)
-    template, visible_missing = update_table_data(template, "tbSted_agent", agent_missing, missing_total, prev_agent_missing)
-    template, visible_online = update_table_data(template, "tbSted1", online_unprotected, unquota_total, prev_online_unprotected)
+    template, changes_interrupted = update_table_data(template, "tbSted0", protection_interrupted, interrupted_total, prev_protection_interrupted)
+    template, changes_missing = update_table_data(template, "tbSted_agent", agent_missing, missing_total, prev_agent_missing)
+    template, changes_online = update_table_data(template, "tbSted1", online_unprotected, unquota_total, prev_online_unprotected)
 
-    # Recalculate week_changes from visible table data for summary text consistency
     visible_week_changes = {
-        "protection_interrupted": visible_interrupted,
-        "agent_missing": visible_missing,
-        "online_unprotected": visible_online,
+        "protection_interrupted": changes_interrupted,
+        "agent_missing": changes_missing,
+        "online_unprotected": changes_online,
     }
 
     # Update week-over-week comparison text (now using visible table changes)
     if prev_protection_interrupted is not None or prev_agent_missing is not None or prev_online_unprotected is not None:
-        # Section 1: protection interrupted
-        interrupted_change = visible_week_changes.get("protection_interrupted", 0)
-        if interrupted_change > 0:
-            old_pattern1 = r'与上周相比较增加[^，台]*台'
-            new_text = f"与上周相比较增加<b><span lang=\"EN-US\" style=\"color:red\">{interrupted_change}</span></b>台"
-        elif interrupted_change < 0:
-            old_pattern1 = r'与上周相比较服务器台数减少[^，台]*台'
-            new_text = f"与上周相比较服务器台数减少<b><span lang=\"EN-US\" style=\"color:red\">{abs(interrupted_change)}</span></b>台"
-        else:
-            old_pattern1 = r'与上周相比较(服务器台数减少[^，台]*台|增加[^，台]*台)'
-            new_text = "与上周相比无变化"
+        # Build comparison text (net total only)
+        def _make_comp_text(changes_dict):
+            net = changes_dict.get("net_change", 0)
+            if net > 0:
+                return f"较上周增加<b><span lang=\"EN-US\" style=\"color:red\">{net}</span></b>台"
+            elif net < 0:
+                return f"较上周减少<b><span lang=\"EN-US\" style=\"color:red\">{abs(net)}</span></b>台"
+            else:
+                return "与上周相比无变化"
 
+        # Section 1: protection interrupted
+        changes1 = visible_week_changes.get("protection_interrupted", {})
+        new_text1 = _make_comp_text(changes1)
+        # Match any existing comparison phrase and replace it
+        old_pattern1 = r'与上周相比[^，。]*\d+[^，。]*?台|与上周相比[^，。]*无变化'
         idx1 = template.find('与上周相比较服务器台数减少')
         if idx1 < 0:
             idx1 = template.find('与上周相比较增加')
         if idx1 >= 0:
             snippet = template[idx1:]
-            snippet = re.sub(old_pattern1, new_text, snippet, count=1)
+            snippet = re.sub(old_pattern1, new_text1, snippet, count=1)
             template = template[:idx1] + snippet
 
         # Section 2: agent missing
-        missing_change = visible_week_changes.get("agent_missing", 0)
-        if missing_change > 0:
-            old_pattern2 = r'与上周相比较增加[^，台]*台'
-            new_text = f"与上周相比较增加<b><span lang=\"EN-US\" style=\"color:red\">{missing_change}</span></b>台"
-        elif missing_change < 0:
-            old_pattern2 = r'与上周相比较减少[^，台]*台'
-            new_text = f"与上周相比较减少<b><span lang=\"EN-US\" style=\"color:red\">{abs(missing_change)}</span></b>台"
-        else:
-            old_pattern2 = r'与上周相比较无变化'
-            new_text = "与上周相比无变化"
-
+        changes2 = visible_week_changes.get("agent_missing", {})
+        new_text2 = _make_comp_text(changes2)
         idx2 = template.find('刨除暂不安装的剩余')
         if idx2 >= 0:
             compare_idx = template.find('与上周相比较', idx2)
             if compare_idx >= 0:
                 snippet = template[compare_idx:]
-                snippet = re.sub(old_pattern2, new_text, snippet, count=1)
+                snippet = re.sub(old_pattern1, new_text2, snippet, count=1)
                 template = template[:compare_idx] + snippet
 
-        # Section 3: online unprotected
-        unquota_change = visible_week_changes.get("online_unprotected", 0)
-        if unquota_change > 0:
-            old_pattern = r'与上周相比增加[^，台]*台'
-            new_text = f"与上周相比增加<b><span lang=\"EN-US\" style=\"color:red\">{unquota_change}</span></b>台"
-        elif unquota_change < 0:
-            old_pattern = r'与上周相比减少[^，台]*台'
-            new_text = f"与上周相比减少<b><span lang=\"EN-US\" style=\"color:red\">{abs(unquota_change)}</span></b>台"
-        else:
-            old_pattern = r'与上周相比无变化'
-            new_text = "与上周相比无变化"
-        
-        # Find the LAST occurrence (section 4)
+        # Section 4: online unprotected (last occurrence)
+        changes4 = visible_week_changes.get("online_unprotected", {})
+        new_text4 = _make_comp_text(changes4)
         all_positions = []
         idx = 0
         while True:
@@ -339,13 +340,24 @@ def generate_email_from_report(
                 break
             all_positions.append(idx)
             idx += 10
-        
-        if len(all_positions) >= 2:
+
+        if len(all_positions) >= 1:
             compare_idx = all_positions[-1]
-            # Use regex to replace only the comparison phrase, preserving everything after
             snippet = template[compare_idx:]
-            snippet = re.sub(old_pattern, new_text, snippet, count=1)
+            # Replace comparison phrase
+            snippet = re.sub(r'与上周相比[^，。]*\d+[^，。]*?台|与上周相比[^，。]*无变化', new_text4, snippet, count=1)
+            # Also update 新增/未增加 server count text
+            # Use direct string replace instead of regex to avoid matching into table content
+            net4 = changes4.get("net_change", 0) if isinstance(changes4, dict) else 0
+            if net4 > 0:
+                snippet = snippet.replace('，未增加服务器数量', f'，增加<b><span lang="EN-US" style="color:red">{net4}</span></b>台服务器数量')
+            elif net4 < 0:
+                snippet = snippet.replace('，未增加服务器数量', '')
             template = template[:compare_idx] + snippet
+    else:
+        # No previous data — clear template's hardcoded comparison values
+        template = re.sub(r'，与上周相[^，。]*\d+台|，与上周相[^，。]*无变化', '', template)
+        template = re.sub(r'，[^，]*?服务器数量', '', template)
 
     # Section 5: Owner emails table (matching the style of tables above)
     if owner_emails:
@@ -390,12 +402,41 @@ def generate_email_from_report(
                 '</p>'
             )
             # Insert after section 4's table (tbSted1), before footer
-            table1_end = template.find("</table>", template.find('id="tbSted1"'))
+            tb_id_pos = template.find('id="tbSted1"')
+            if tb_id_pos < 0:
+                # tbSted1 ID not found - fall back to last </table> before disclaimer
+                disc_pos = template.find('保密信息')
+                if disc_pos < 0:
+                    disc_pos = template.find('confidential')
+                if disc_pos > 0:
+                    table1_end = template.rfind('</table>', 0, disc_pos)
+                else:
+                    table1_end = template.rfind('</table>')
+            else:
+                table1_end = template.find('</table>', tb_id_pos)
             if table1_end > 0:
                 insert_pos = table1_end + 8  # after </table>
                 template = template[:insert_pos] + section5_html + template[insert_pos:]
             else:
                 template += section5_html
+
+    # Fix any orphan </table> caused by regex replacements
+    # Remove unmatched </table> tags (first occurrence(s) that break balance)
+    parts = []
+    last_end = 0
+    balance = 0
+    for _m in re.finditer(r'<(/?)(table)\b[^>]*>', template):
+        if _m.group(1) == '/':
+            if balance <= 0:
+                # Orphan close - skip it
+                parts.append(template[last_end:_m.start()])
+                last_end = _m.end()
+            else:
+                balance -= 1
+        else:
+            balance += 1
+    parts.append(template[last_end:])
+    template = ''.join(parts)
 
     return template
 
