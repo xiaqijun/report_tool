@@ -12,6 +12,8 @@ import IconMenu from '@douyinfe/semi-icons/lib/es/icons/IconMenu'
 import IconChevronDown from '@douyinfe/semi-icons/lib/es/icons/IconChevronDown'
 import IconBell from '@douyinfe/semi-icons/lib/es/icons/IconBell'
 import IconCalendar from '@douyinfe/semi-icons/lib/es/icons/IconCalendar'
+import IconTick from '@douyinfe/semi-icons/lib/es/icons/IconTick'
+import IconSearch from '@douyinfe/semi-icons/lib/es/icons/IconSearch'
 import { useAuthStore } from '../../store/auth'
 
 const { Header, Sider, Content } = Layout
@@ -28,7 +30,8 @@ export default function MainLayout() {
   }
 
   const isDailyReport = location.pathname.startsWith('/daily-report')
-  const currentModule = isDailyReport ? '安全日报' : '主机预警'
+  const isTools = location.pathname.startsWith('/tools')
+  const currentModule = isTools ? '富强专用工具' : (isDailyReport ? '安全日报' : '主机预警')
 
   const navItems = [
     {
@@ -53,6 +56,14 @@ export default function MainLayout() {
         { itemKey: '/daily-report/preview', text: '预览日报', icon: <IconFile /> },
         { itemKey: '/daily-report/operators', text: '运营人员', icon: <IconUserGroup /> },
         { itemKey: '/daily-report/llm-settings', text: '大模型配置', icon: <IconSetting /> },
+      ],
+    },
+    {
+      itemKey: 'tools',
+      text: '富强专用工具',
+      icon: <IconTick />,
+      items: [
+        { itemKey: '/tools/ip-query', text: 'IP批量查询', icon: <IconSearch /> },
       ],
     },
     {
@@ -126,7 +137,7 @@ export default function MainLayout() {
         <Nav
           items={navItems}
           selectedKeys={[location.pathname]}
-          defaultOpenKeys={['host-alert', 'daily-report']}
+          defaultOpenKeys={['host-alert', 'daily-report', 'tools']}
           onClick={({ itemKey }) => {
             // 只有叶子节点才导航（没有子菜单的项）
             const isLeaf = !navItems.some(group => group.itemKey === itemKey)
