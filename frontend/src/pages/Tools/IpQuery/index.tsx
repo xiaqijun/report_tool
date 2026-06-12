@@ -3,7 +3,7 @@ import { Tabs, TabPane, TextArea, Button, Table, Spin, Toast, Tag, Upload } from
 import IconSearch from '@douyinfe/semi-icons/lib/es/icons/IconSearch'
 import IconUpload from '@douyinfe/semi-icons/lib/es/icons/IconUpload'
 import IconDownload from '@douyinfe/semi-icons/lib/es/icons/IconDownload'
-import api from '../../api'
+import api from '../../../api'
 
 interface IpResult {
   Ip: string
