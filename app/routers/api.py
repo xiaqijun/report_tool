@@ -802,3 +802,59 @@ async def api_send_warning_email(request: Request):
     )
 
     return result
+
+
+class IpQueryRequest(BaseModel):
+    ips: list[str]
+
+
+@router.post("/tools/ip-query")
+async def api_ip_query(request: Request, body: Optional[IpQueryRequest] = None):
+    """IP 批量查询 — 支持 JSON 和文件上传两种方式."""
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+
+    from ..services.ip_query import classify_ips, query_ips
+
+    # 格式 A: 文件上传 (multipart/form-data)
+    ips = []
+
+    if body and body.ips:
+        # 格式 B: JSON body
+        ips = body.ips
+    else:
+        # 尝试从 form 中读取文件
+        form = await request.form()
+        upload_file = form.get("file")
+        if upload_file and hasattr(upload_file, "filename"):
+            content = (await upload_file.read()).decode("utf-8", errors="ignore")
+            # 从文件内容中提取 IP（每行最后一个空白分隔的 token）
+            for line in content.splitlines():
+                line = line.strip()
+                if line:
+                    ips.append(line.split()[-1])
+        else:
+            raise HTTPException(status_code=400, detail="请提供 IP 列表或上传文件")
+
+    if not ips:
+        raise HTTPException(status_code=400, detail="未识别到有效的 IP 地址")
+
+    classification = classify_ips(ips)
+
+    try:
+        results = query_ips(ips)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"IP 查询失败: {str(e)}")
+
+    return {
+        "summary": {
+            "total": classification["total"],
+            "unique": classification["unique"],
+            "v4_count": len(classification["v4"]),
+            "v6_count": len(classification["v6"]),
+            "invalid_count": len(classification["invalid"]),
+            "duplicate_count": classification["duplicate_count"],
+        },
+        "results": results,
+    }
