@@ -23,14 +23,33 @@ interface Summary {
   duplicate_count: number
 }
 
-// Extract IPs from text (supports newline, comma, space separation)
 function parseIps(text: string): string[] {
   return text
     .split(/[\n,]+/)
     .map(s => s.trim())
     .filter(Boolean)
-    .map(s => s.split(/\s+/).pop()!) // Take the last whitespace-delimited token
+    .map(s => s.split(/\s+/).pop()!)
     .filter(Boolean)
+}
+
+const columns = [
+  { title: 'IP', dataIndex: 'Ip', sorter: (a: IpResult, b: IpResult) => a.Ip.localeCompare(b.Ip) },
+  { title: '国家', dataIndex: 'Country', sorter: (a: IpResult, b: IpResult) => a.Country.localeCompare(b.Country) },
+  { title: '省份', dataIndex: 'Province', sorter: (a: IpResult, b: IpResult) => a.Province.localeCompare(b.Province) },
+  { title: '城市', dataIndex: 'City', sorter: (a: IpResult, b: IpResult) => a.City.localeCompare(b.City) },
+  { title: '运营商', dataIndex: 'Operator', sorter: (a: IpResult, b: IpResult) => a.Operator.localeCompare(b.Operator) },
+  {
+    title: '来源',
+    dataIndex: 'Source',
+    sorter: (a: IpResult, b: IpResult) => a.Source.localeCompare(b.Source),
+    render: (text: string) => text ? <Tag size="small">{text}</Tag> : null,
+  },
+]
+
+function formatTime(s: number) {
+  const m = Math.floor(s / 60)
+  const sec = s % 60
+  return m > 0 ? `${m}分${sec}秒` : `${sec}秒`
 }
 
 export default function IpQueryPage() {
@@ -109,25 +128,6 @@ export default function IpQueryPage() {
     a.download = `ip_result_${Date.now()}.csv`
     a.click()
     URL.revokeObjectURL(url)
-  }
-
-  const columns = [
-    { title: 'IP', dataIndex: 'Ip', sorter: (a: IpResult, b: IpResult) => a.Ip.localeCompare(b.Ip) },
-    { title: '国家', dataIndex: 'Country', sorter: true },
-    { title: '省份', dataIndex: 'Province', sorter: true },
-    { title: '城市', dataIndex: 'City', sorter: true },
-    { title: '运营商', dataIndex: 'Operator', sorter: true },
-    {
-      title: '来源',
-      dataIndex: 'Source',
-      render: (text: string) => text ? <Tag size="small">{text}</Tag> : null,
-    },
-  ]
-
-  const formatTime = (s: number) => {
-    const m = Math.floor(s / 60)
-    const sec = s % 60
-    return m > 0 ? `${m}分${sec}秒` : `${sec}秒`
   }
 
   return (
