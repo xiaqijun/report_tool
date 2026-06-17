@@ -804,6 +804,28 @@ async def api_send_warning_email(request: Request):
     return result
 
 
+@router.post("/system/version-check")
+async def api_version_check(request: Request):
+    """Check for new version."""
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+
+    from ..services.system_update import check_version
+    return check_version()
+
+
+@router.post("/system/update")
+async def api_system_update(request: Request):
+    """Pull latest code and sync dependencies."""
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+
+    from ..services.system_update import run_update
+    return run_update()
+
+
 class IpQueryRequest(BaseModel):
     ips: list[str]
 
