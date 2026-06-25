@@ -129,7 +129,7 @@ async def api_delete_history(request: Request, batch_code: str):
 
 
 @router.get("/daily-report")
-async def api_daily_report(request: Request):
+async def api_daily_report(request: Request, report_date: str = ""):
     """Get daily report data."""
     user = require_login(request)
     if not isinstance(user, dict):
@@ -137,14 +137,15 @@ async def api_daily_report(request: Request):
 
     from datetime import date
 
-    today = date.today().isoformat()
-    report = db.get_daily_report_by_date(today)
+    if not report_date:
+        report_date = date.today().isoformat()
+    report = db.get_daily_report_by_date(report_date)
     operators = db.list_ops_personnel()
 
     return {
         "report": report,
         "operators": operators,
-        "report_date": today,
+        "report_date": report_date,
     }
 
 
@@ -159,18 +160,18 @@ async def api_generate_top_section(request: Request):
     from ..services.daily_report_ai import generate_top_section_text
     from ..routers.daily_report import SUMMARY_FIELD_MAPPINGS, NUMERIC_FIELDS
 
-    today = date.today().isoformat()
     body = await request.json()
+    report_date = str(body.get("report_date", "")).strip() or date.today().isoformat()
     target_field = str(body.get("target_field", "")).strip()
     fields = (target_field,) if target_field else None
 
     # Build payload: merge existing report + submitted form values
-    existing = db.get_daily_report_by_date(today) or {}
+    existing = db.get_daily_report_by_date(report_date) or {}
     payload = dict(existing)
     for k, v in body.items():
         if v is not None and v != "":
             payload[k] = v
-    payload["report_date"] = today
+    payload["report_date"] = report_date
 
     # Sync summary fields from detail fields
     for sf, df in SUMMARY_FIELD_MAPPINGS.items():
@@ -184,7 +185,7 @@ async def api_generate_top_section(request: Request):
             payload[nf] = 0
 
     # Build previous report with synced summary fields
-    previous = db.get_previous_report(today) or {}
+    previous = db.get_previous_report(report_date) or {}
     for sf, df in SUMMARY_FIELD_MAPPINGS.items():
         previous[sf] = int(previous.get(df, previous.get(sf, 0)) or 0)
 
@@ -203,14 +204,14 @@ async def api_save_daily_report(request: Request):
 
     from datetime import date
 
-    today = date.today().isoformat()
-    db.save_daily_report(today, data)
+    report_date = data.pop("report_date", "") or date.today().isoformat()
+    db.save_daily_report(report_date, data)
 
     return {"success": True}
 
 
 @router.get("/daily-report/download")
-async def api_download_daily_report(request: Request):
+async def api_download_daily_report(request: Request, report_date: str = ""):
     """Download daily report DOCX."""
     user = require_login(request)
     if not isinstance(user, dict):
@@ -219,13 +220,14 @@ async def api_download_daily_report(request: Request):
     from datetime import date
     from ..services.docx_generator import generate_daily_report_docx
 
-    today = date.today().isoformat()
-    report = db.get_daily_report_by_date(today)
+    if not report_date:
+        report_date = date.today().isoformat()
+    report = db.get_daily_report_by_date(report_date)
 
     if not report:
-        raise HTTPException(status_code=404, detail="今日日报尚未填写")
+        raise HTTPException(status_code=404, detail="未找到该日期的日报")
 
-    file_path = generate_daily_report_docx(today, report)
+    file_path = generate_daily_report_docx(report_date, report)
     return FileResponse(
         file_path,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
