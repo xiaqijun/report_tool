@@ -419,6 +419,7 @@ def _add_section_2(doc: Document, report: dict) -> None:
 
     _add_sub_heading(doc, "2. 事件应急响应：")
     _add_para(doc, str(report.get("emergency_response", "")))
+    _add_optional_screenshot(doc, report.get("emergency_response_screenshot_path", ""))
 
 
 def _add_waf_detail(doc: Document, report: dict) -> None:
