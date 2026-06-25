@@ -148,6 +148,49 @@ async def api_daily_report(request: Request):
     }
 
 
+@router.post("/daily-report/generate-top-section")
+async def api_generate_top_section(request: Request):
+    """AI generate the three top-section text fields."""
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+
+    from datetime import date
+    from ..services.daily_report_ai import generate_top_section_text
+    from ..routers.daily_report import SUMMARY_FIELD_MAPPINGS, NUMERIC_FIELDS
+
+    today = date.today().isoformat()
+    body = await request.json()
+    target_field = str(body.get("target_field", "")).strip()
+    fields = (target_field,) if target_field else None
+
+    # Build payload: merge existing report + submitted form values
+    existing = db.get_daily_report_by_date(today) or {}
+    payload = dict(existing)
+    for k, v in body.items():
+        if v is not None and v != "":
+            payload[k] = v
+    payload["report_date"] = today
+
+    # Sync summary fields from detail fields
+    for sf, df in SUMMARY_FIELD_MAPPINGS.items():
+        payload[sf] = int(payload.get(df, payload.get(sf, 0)) or 0)
+
+    # Coerce numeric fields
+    for nf in NUMERIC_FIELDS:
+        try:
+            payload[nf] = int(payload.get(nf, 0) or 0)
+        except (ValueError, TypeError):
+            payload[nf] = 0
+
+    # Build previous report with synced summary fields
+    previous = db.get_previous_report(today) or {}
+    for sf, df in SUMMARY_FIELD_MAPPINGS.items():
+        previous[sf] = int(previous.get(df, previous.get(sf, 0)) or 0)
+
+    return generate_top_section_text(payload, previous, fields=fields)
+
+
 @router.post("/daily-report/save")
 async def api_save_daily_report(request: Request):
     """Save daily report."""
