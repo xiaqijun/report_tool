@@ -248,12 +248,14 @@ async def api_send_daily_report_email(request: Request):
     body = await request.json()
     report_date = str(body.get("report_date", "")).strip() or dt_date.today().isoformat()
     to_raw = str(body.get("to", "")).strip()
+    cc_raw = str(body.get("cc", "")).strip()
     subject = str(body.get("subject", "")).strip()
 
     if not to_raw:
         raise HTTPException(status_code=400, detail="收件人不能为空")
 
     to_list = [e.strip() for e in to_raw.replace("；", ";").replace("，", ",").split(",") if e.strip()]
+    cc_list = [e.strip() for e in cc_raw.replace("；", ";").replace("，", ",").split(",") if e.strip()] if cc_raw else None
 
     report = db.get_daily_report_by_date(report_date)
     if not report:
@@ -264,7 +266,7 @@ async def api_send_daily_report_email(request: Request):
 
     # Get email settings
     email_settings = db.get_email_settings() or {}
-    if not email_settings.get("smtp_host") or not email_settings.get("from_addr"):
+    if not email_settings.get("smtp_host") or not email_settings.get("smtp_from"):
         raise HTTPException(status_code=400, detail="邮件服务未配置，请先在系统设置中配置SMTP")
 
     from ..services.email_service import send_email
@@ -288,14 +290,15 @@ async def api_send_daily_report_email(request: Request):
     result = send_email(
         to_list=to_list,
         subject=subject,
-        html=html,
+        html_content=html,
+        cc_list=cc_list,
         attachments=[{"filename": f"安全运营日报-{report_date}.docx", "path": docx_path}],
         smtp_config={
             "host": email_settings.get("smtp_host", ""),
             "port": int(email_settings.get("smtp_port", 25)),
             "user": email_settings.get("smtp_user", ""),
             "password": email_settings.get("smtp_password", ""),
-            "from_addr": email_settings.get("from_addr", ""),
+            "smtp_from": email_settings.get("smtp_from", ""),
             "use_tls": email_settings.get("use_tls", False),
         },
     )
