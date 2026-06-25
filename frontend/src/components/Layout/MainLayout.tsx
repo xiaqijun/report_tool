@@ -20,6 +20,7 @@ const { Header, Sider, Content } = Layout
 
 export default function MainLayout() {
   const [collapsed, setCollapsed] = useState(false)
+  const [openKeys, setOpenKeys] = useState<string[]>(['host-alert', 'daily-report', 'tools'])
   const navigate = useNavigate()
   const location = useLocation()
   const { user, logout } = useAuthStore()
@@ -137,11 +138,14 @@ export default function MainLayout() {
         <Nav
           items={navItems}
           selectedKeys={[location.pathname]}
-          defaultOpenKeys={['host-alert', 'daily-report', 'tools']}
+          openKeys={openKeys}
+          onOpenChange={({ openKeys: keys }) => setOpenKeys(keys as string[])}
           onClick={({ itemKey }) => {
             // 只有叶子节点才导航（没有子菜单的项）
             const isLeaf = !navItems.some(group => group.itemKey === itemKey)
             if (isLeaf) {
+              // 保持当前展开状态（创建新引用以覆盖 Semi Nav 内部的 getWillOpenKeys）
+              setOpenKeys(prev => [...prev])
               navigate(itemKey as string)
             }
           }}
