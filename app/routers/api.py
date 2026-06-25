@@ -281,10 +281,77 @@ async def api_send_daily_report_email(request: Request):
     if not subject:
         subject = f"安全运营日报 - {date_display}"
 
-    html = f"""<html><body>
-<p>各位好，</p>
-<p>附件为 {date_display} 的安全运营日报，请查收。</p>
-<p style="color:#6b7280;font-size:12px">此邮件由报告管理工具自动发送</p>
+    def _s(key: str, fallback: str = "-") -> str:
+        v = report.get(key, "")
+        return str(v).strip() if v else fallback
+
+    def _n(key: str) -> int:
+        try: return int(report.get(key, 0) or 0)
+        except: return 0
+
+    monitor = f"{_s('monitor_start')} ~ {_s('monitor_end')}" if _s('monitor_start') != '-' else ""
+    waf_exceeded = '<span style="color:#dc2626;font-weight:700">【超出规格】</span>' if int(report.get('waf_exceeded_spec', 0) or 0) else ''
+    cfw_exceeded = '<span style="color:#dc2626;font-weight:700">【超出规格】</span>' if int(report.get('cfw_exceeded_spec', 0) or 0) else ''
+
+    html = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+body{{font-family:"Microsoft YaHei","PingFang SC",sans-serif;font-size:14px;color:#1f2937;line-height:1.8;padding:20px;max-width:760px;margin:0 auto}}
+h1{{text-align:center;font-size:20px;margin-bottom:4px}}
+.meta{{text-align:center;color:#6b7280;font-size:13px;margin-bottom:24px}}
+h2{{font-size:16px;border-bottom:2px solid #e5e7eb;padding-bottom:6px;margin:24px 0 14px}}
+h3{{font-size:14px;color:#374151;margin:16px 0 8px}}
+p{{margin:6px 0;text-indent:2em}}
+.prod{{background:#f9fafb;border-radius:8px;padding:12px 16px;margin:8px 0}}
+.prod-name{{font-weight:700;font-size:13px;margin-bottom:6px}}
+.tag{{display:inline-block;background:#e5e7eb;border-radius:4px;padding:2px 8px;margin:2px 4px 2px 0;font-size:12px}}
+.tag-red{{background:#fee2e2;color:#dc2626}}
+.tag-orange{{background:#ffedd5;color:#ea580c}}
+.tag-yellow{{background:#fef9c3;color:#ca8a04}}
+.footer{{margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;color:#9ca3af;font-size:12px}}
+</style></head><body>
+<h1>安全运营日报</h1>
+<div class="meta">{date_display}{' · ' + monitor if monitor else ''}</div>
+
+<h2>一、总体安全态势</h2>
+<p><strong>业务运行情况：</strong>{_s('business_stability', '暂无')}</p>
+<p><strong>趋势对比说明：</strong>{_s('trend_comparison', '暂无')}</p>
+<p><strong>总体评估：</strong>{_s('overall_assessment', '暂无')}</p>
+
+<h2>二、安全监控</h2>
+<h3>1. 攻击告警监控</h3>
+
+<div class="prod"><div class="prod-name">WAF 应用防火墙</div>
+<span class="tag">攻击 {_n('waf_detail_attacks')} 次</span><span class="tag">拦截 {_n('waf_detail_blocked')} 次</span><span class="tag">封禁IP {_n('waf_ips_banned')} 个</span>
+{waf_exceeded + (' ' if waf_exceeded else '')}<span class="tag">QPS规格 {_s('waf_qps_specs')}</span><span class="tag">峰值 {_s('waf_qps_peak_value', '0')}（{_s('waf_qps_peak_range')}）</span>
+</div>
+
+<div class="prod"><div class="prod-name">CFW 云防火墙</div>
+<span class="tag">攻击 {_n('cfw_detail_attacks')} 次</span><span class="tag">未阻断 {_n('cfw_detail_unblocked')} 次</span>
+{cfw_exceeded + (' ' if cfw_exceeded else '')}<span class="tag">带宽规格 {_s('cfw_bandwidth_spec')}</span><span class="tag">入方向峰值 {_s('cfw_inbound_peak')}（{_s('cfw_peak_inbound_range')}）</span><span class="tag">95带宽 {_s('cfw_inbound_95th')}</span>
+</div>
+
+<div class="prod"><div class="prod-name">HSS 主机安全</div>
+<span class="tag">告警 {_n('hss_detail_total')} 次</span><span class="tag tag-red">致命 {_n('hss_detail_fatal')}</span><span class="tag tag-orange">高危 {_n('hss_detail_high')}</span><span class="tag tag-yellow">中危 {_n('hss_detail_medium')}</span><span class="tag">低危 {_n('hss_detail_low')}</span><span class="tag">未闭环 {_n('hss_unclosed_event_count')} 起</span>
+</div>
+
+<div class="prod"><div class="prod-name">DDoS 高防</div>
+<span class="tag">清洗 {_n('ddos_detail_cleanings')} 次</span><span class="tag">黑洞 {_n('ddos_detail_blackholes')} 次</span>
+</div>
+
+<div class="prod"><div class="prod-name">SecMaster 态势感知</div>
+<span class="tag">告警 {_n('secmaster_detail_total')} 次</span><span class="tag tag-red">致命 {_n('secmaster_detail_fatal')}</span><span class="tag tag-orange">高危 {_n('secmaster_detail_high')}</span><span class="tag tag-yellow">中危 {_n('secmaster_detail_medium')}</span><span class="tag">低危 {_n('secmaster_detail_low')}</span><span class="tag">提示 {_n('secmaster_detail_info')}</span><span class="tag">未闭环 {_n('secmaster_unclosed_event_count')} 起</span>
+</div>
+
+<h3>2. 事件应急响应</h3>
+<p>{_s('emergency_response', '无')}</p>
+
+<h2>三、重点工作内容</h2>
+<p>{_s('key_work_content', '暂无')}</p>
+
+<h2>四、遗留事项</h2>
+<p>{_s('legacy_items', '暂无')}</p>
+
+<div class="footer">此邮件由报告管理工具自动发送 · 附件为 Word 文档</div>
 </body></html>"""
 
     result = send_email(
