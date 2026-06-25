@@ -65,6 +65,11 @@ def create_app() -> FastAPI:
             return RedirectResponse(url="/", status_code=302)
         return FileResponse(path=file_path, filename=file_path.name)
 
+    # Serve uploaded screenshots
+    uploads_dir = BASE_DIR / "data" / "uploads"
+    if uploads_dir.exists():
+        app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
+
     # Serve React frontend
     if REACT_DIR.exists():
         app.mount("/assets", StaticFiles(directory=REACT_DIR / "assets"), name="react-assets")
@@ -83,7 +88,7 @@ def create_app() -> FastAPI:
             if path.startswith("api/"):
                 raise HTTPException(status_code=404, detail="Not found")
             # Skip static files
-            if path.startswith("static/"):
+            if path.startswith("static/") or path.startswith("uploads/"):
                 raise HTTPException(status_code=404, detail="Not found")
             # Skip download routes
             if path.startswith("download/"):
