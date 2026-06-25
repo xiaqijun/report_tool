@@ -245,7 +245,7 @@ def init_db() -> None:
                 emergency_response TEXT NOT NULL,
                 attack_path_assessment TEXT NOT NULL,
                 key_work_content TEXT NOT NULL,
-                legacy_items TEXT NOT NULL DEFAULT '',
+                legacy_items TEXT NOT NULL,
                 legacy_items_screenshot_path VARCHAR(255) NOT NULL DEFAULT '',
                 operator_name VARCHAR(255) NOT NULL,
                 created_at VARCHAR(32) NOT NULL,
@@ -286,7 +286,7 @@ def init_db() -> None:
         _ensure_column(connection, "daily_security_reports", "emergency_response_screenshot_path", "VARCHAR(255) NOT NULL DEFAULT ''")
         _ensure_column(connection, "daily_security_reports", "attack_path_screenshot_path", "VARCHAR(255) NOT NULL DEFAULT ''")
         _ensure_column(connection, "daily_security_reports", "key_work_screenshot_path", "VARCHAR(255) NOT NULL DEFAULT ''")
-        _ensure_column(connection, "daily_security_reports", "legacy_items", "TEXT NOT NULL DEFAULT ''")
+        _ensure_column(connection, "daily_security_reports", "legacy_items", "TEXT NOT NULL")
         _ensure_column(connection, "daily_security_reports", "legacy_items_screenshot_path", "VARCHAR(255) NOT NULL DEFAULT ''")
 
 
