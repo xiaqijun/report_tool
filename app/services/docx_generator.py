@@ -461,6 +461,7 @@ def _add_cfw_detail(doc: Document, report: dict) -> None:
             f"监测到带宽峰值时间段为{peak_range}，"
             f"入方向流量峰值{inbound_peak}，入方向95带宽值{inbound_95}。" + exceeded
         )
+        _add_optional_screenshot(doc, report.get("cfw_bandwidth_screenshot_path", ""))
 
 
 def _add_hss_detail(doc: Document, report: dict) -> None:

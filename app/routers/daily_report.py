@@ -36,6 +36,7 @@ SCREENSHOT_FIELD_TO_SECTION = {
     "waf": "waf_screenshot_path",
     "waf-qps": "waf_qps_screenshot_path",
     "cfw": "cfw_screenshot_path",
+    "cfw-bandwidth": "cfw_bandwidth_screenshot_path",
     "hss": "hss_screenshot_path",
     "ddos": "ddos_screenshot_path",
     "secmaster": "secmaster_screenshot_path",
