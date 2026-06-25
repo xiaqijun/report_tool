@@ -231,8 +231,75 @@ async def api_download_daily_report(request: Request, report_date: str = ""):
     return FileResponse(
         file_path,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        filename=f"安全运营日报-{today}.docx",
+        filename=f"安全运营日报-{report_date}.docx",
     )
+
+
+@router.post("/daily-report/send-report-email")
+async def api_send_daily_report_email(request: Request):
+    """Send daily report DOCX via email."""
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+
+    from datetime import date as dt_date
+    from ..services.docx_generator import generate_daily_report_docx
+
+    body = await request.json()
+    report_date = str(body.get("report_date", "")).strip() or dt_date.today().isoformat()
+    to_raw = str(body.get("to", "")).strip()
+    subject = str(body.get("subject", "")).strip()
+
+    if not to_raw:
+        raise HTTPException(status_code=400, detail="收件人不能为空")
+
+    to_list = [e.strip() for e in to_raw.replace("；", ";").replace("，", ",").split(",") if e.strip()]
+
+    report = db.get_daily_report_by_date(report_date)
+    if not report:
+        raise HTTPException(status_code=404, detail="该日期无日报数据，请先保存")
+
+    # Generate DOCX
+    docx_path = generate_daily_report_docx(report_date, report)
+
+    # Get email settings
+    email_settings = db.get_email_settings() or {}
+    if not email_settings.get("smtp_host") or not email_settings.get("from_addr"):
+        raise HTTPException(status_code=400, detail="邮件服务未配置，请先在系统设置中配置SMTP")
+
+    from ..services.email_service import send_email
+    from datetime import datetime
+
+    try:
+        dt = datetime.strptime(report_date, "%Y-%m-%d")
+        date_display = f"{dt.year}年{dt.month:02d}月{dt.day:02d}日"
+    except ValueError:
+        date_display = report_date
+
+    if not subject:
+        subject = f"安全运营日报 - {date_display}"
+
+    html = f"""<html><body>
+<p>各位好，</p>
+<p>附件为 {date_display} 的安全运营日报，请查收。</p>
+<p style="color:#6b7280;font-size:12px">此邮件由报告管理工具自动发送</p>
+</body></html>"""
+
+    result = send_email(
+        to_list=to_list,
+        subject=subject,
+        html=html,
+        attachments=[{"filename": f"安全运营日报-{report_date}.docx", "path": docx_path}],
+        smtp_config={
+            "host": email_settings.get("smtp_host", ""),
+            "port": int(email_settings.get("smtp_port", 25)),
+            "user": email_settings.get("smtp_user", ""),
+            "password": email_settings.get("smtp_password", ""),
+            "from_addr": email_settings.get("from_addr", ""),
+            "use_tls": email_settings.get("use_tls", False),
+        },
+    )
+    return result
 
 
 @router.get("/operators")
