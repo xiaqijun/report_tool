@@ -150,35 +150,46 @@ LLM 和邮件配置也可通过 `/api/llm-settings` 和 `/api/email/settings` �
 - 日报 DOCX 模板：`app/static/report-templates/daily-report-template.docx`
 - 邮件模板内嵌图片：`app/static/email-images/`
 
----
+<!-- gitnexus:start -->
+# GitNexus — Code Intelligence
 
-## GitNexus — 代码智能
+This project is indexed by GitNexus as **report_tool** (1327 symbols, 4067 relationships, 116 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
-此项目由 GitNexus 索引为 **report_tool**。GitNexus 规则详见 `AGENTS.md`（自动生成，勿手动编辑）。
+> If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
-> 如果任何 GitNexus 工具警告索引过期，先在终端运行 `npx gitnexus analyze`。
+## Always Do
 
-### 必须做
+- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `gitnexus_impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
+- **MUST run `gitnexus_detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows.
+- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
+- When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
+- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `gitnexus_context({name: "symbolName"})`.
 
-- **修改任何符号前必须运行影响分析。** 运行 `mcp__gitnexus__impact({target: "symbolName", direction: "upstream"})` 并报告影响半径。
-- **提交前必须运行 `mcp__gitnexus__detect_changes()`** 验证更改范围。
-- **影响分析返回 HIGH 或 CRITICAL 风险时必须警告用户** 才能继续编辑。
-- 探索不熟悉的代码时，使用 `mcp__gitnexus__query({query: "概念"})` 查找执行流程。
-- 需要符号完整上下文时，使用 `mcp__gitnexus__context({name: "symbolName"})`。
+## Never Do
 
-### 禁止做
+- NEVER edit a function, class, or method without first running `gitnexus_impact` on it.
+- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
+- NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
+- NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
 
-- 禁止在未先运行影响分析的情况下编辑函数、类或方法。
-- 禁止忽略 HIGH 或 CRITICAL 风险警告。
-- 禁止用查找替换重命名符号 — 使用 `mcp__gitnexus__rename`。
-- 禁止在未运行 `mcp__gitnexus__detect_changes()` 的情况下提交更改。
+## Resources
 
-### MCP 资源
+| Resource | Use for |
+|----------|---------|
+| `gitnexus://repo/report_tool/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/report_tool/clusters` | All functional areas |
+| `gitnexus://repo/report_tool/processes` | All execution flows |
+| `gitnexus://repo/report_tool/process/{name}` | Step-by-step execution trace |
 
-| 资源 | 用途 |
-|---|---|
-| `gitnexus://repo/report_tool/context` | 代码库概览，检查索引新鲜度 |
-| `gitnexus://repo/report_tool/clusters` | 所有功能区域 |
-| `gitnexus://repo/report_tool/processes` | 所有执行流程 |
-| `gitnexus://repo/report_tool/process/{name}` | 分步执行追踪 |
-| `gitnexus://repo/report_tool/schema` | Cypher 查询的图 schema |
+## CLI
+
+| Task | Read this skill file |
+|------|---------------------|
+| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
+| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
+| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
+| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
+| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
+| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
+
+<!-- gitnexus:end -->
