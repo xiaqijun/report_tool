@@ -245,6 +245,8 @@ def init_db() -> None:
                 emergency_response TEXT NOT NULL,
                 attack_path_assessment TEXT NOT NULL,
                 key_work_content TEXT NOT NULL,
+                legacy_items TEXT NOT NULL DEFAULT '',
+                legacy_items_screenshot_path VARCHAR(255) NOT NULL DEFAULT '',
                 operator_name VARCHAR(255) NOT NULL,
                 created_at VARCHAR(32) NOT NULL,
                 updated_at VARCHAR(32) NOT NULL
@@ -284,6 +286,8 @@ def init_db() -> None:
         _ensure_column(connection, "daily_security_reports", "emergency_response_screenshot_path", "VARCHAR(255) NOT NULL DEFAULT ''")
         _ensure_column(connection, "daily_security_reports", "attack_path_screenshot_path", "VARCHAR(255) NOT NULL DEFAULT ''")
         _ensure_column(connection, "daily_security_reports", "key_work_screenshot_path", "VARCHAR(255) NOT NULL DEFAULT ''")
+        _ensure_column(connection, "daily_security_reports", "legacy_items", "TEXT NOT NULL DEFAULT ''")
+        _ensure_column(connection, "daily_security_reports", "legacy_items_screenshot_path", "VARCHAR(255) NOT NULL DEFAULT ''")
 
 
 def ensure_default_admin(username: str, password: str) -> None:
@@ -670,7 +674,7 @@ def save_daily_report(report_date: str, payload: dict[str, object], operator_nam
         "ddos_detail_cleanings", "ddos_detail_blackholes", "ddos_screenshot_path",
         "secmaster_detail_total", "secmaster_detail_fatal", "secmaster_detail_high",
         "secmaster_detail_medium", "secmaster_detail_low", "secmaster_detail_info", "secmaster_unclosed_event_count", "secmaster_screenshot_path",
-        "emergency_response", "emergency_response_screenshot_path", "attack_path_assessment", "attack_path_screenshot_path", "key_work_content", "key_work_screenshot_path",
+        "emergency_response", "emergency_response_screenshot_path", "attack_path_assessment", "attack_path_screenshot_path", "key_work_content", "key_work_screenshot_path", "legacy_items", "legacy_items_screenshot_path",
     ]
 
     with get_connection() as connection:

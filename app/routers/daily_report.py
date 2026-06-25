@@ -39,8 +39,8 @@ SCREENSHOT_FIELD_TO_SECTION = {
     "hss": "hss_screenshot_path",
     "ddos": "ddos_screenshot_path",
     "secmaster": "secmaster_screenshot_path",
-    "attack-path": "attack_path_screenshot_path",
     "key-work": "key_work_screenshot_path",
+    "legacy-items": "legacy_items_screenshot_path",
 }
 
 ALLOWED_SCREENSHOT_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
@@ -144,7 +144,7 @@ def _normalize_report_payload(payload: dict[str, object], existing_report: dict[
         "cfw_bandwidth_spec", "cfw_peak_inbound_range",
         "cfw_inbound_peak", "cfw_inbound_95th",
         "hss_closed_loop_status", "emergency_response",
-        "attack_path_assessment", "key_work_content",
+        "key_work_content", "legacy_items",
     ):
         normalized[text_field] = str(normalized.get(text_field, existing_report.get(text_field, ""))).strip()
 
@@ -259,7 +259,7 @@ async def daily_report_save(request: Request) -> Response:
         "cfw_bandwidth_spec", "cfw_peak_inbound_range",
         "cfw_inbound_peak", "cfw_inbound_95th",
         "hss_closed_loop_status",
-        "emergency_response", "attack_path_assessment", "key_work_content",
+        "emergency_response", "key_work_content", "legacy_items",
     ]
     for field in text_fields:
         payload[field] = str(form.get(field, "")).strip()

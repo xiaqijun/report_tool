@@ -245,23 +245,23 @@ def parse_docx(path: Path) -> Dict[str, object]:
             if er_simple:
                 payload["emergency_response"] = er_simple.group(1).strip()
 
-    # --- Section 3: 攻击路径评估 ---
-    idx3 = _find_section(texts, "三、攻击路径评估")
+    # --- Section 3: 重点工作内容 ---
+    idx3 = _find_section(texts, "三、重点工作内容")
     if idx3 is not None and idx3 + 1 < len(texts):
         next_text = texts[idx3 + 1]
         if not next_text.startswith("四、"):
-            payload["attack_path_assessment"] = next_text
+            payload["key_work_content"] = next_text
 
-    # --- Section 4: 重点工作内容 ---
-    idx4 = _find_section(texts, "四、重点工作内容")
+    # --- Section 4: 遗留事项 ---
+    idx4 = _find_section(texts, "四、遗留事项")
     if idx4 is not None and idx4 + 1 < len(texts):
         next_text = texts[idx4 + 1]
         if not next_text.startswith("五、"):
-            payload["key_work_content"] = next_text
+            payload["legacy_items"] = next_text
 
     # Fill defaults for fields not present
-    payload.setdefault("attack_path_assessment", "暂无")
     payload.setdefault("key_work_content", "暂无")
+    payload.setdefault("legacy_items", "暂无")
     payload.setdefault("emergency_response", "无。")
 
     return payload

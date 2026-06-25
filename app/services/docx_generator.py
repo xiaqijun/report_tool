@@ -67,8 +67,8 @@ def _build_template_context(report: dict, operators: list[dict]) -> dict[str, ob
         "secmaster_detail": _compose_secmaster_detail(report),
         "emergency_heading": "事件应急响应：",
         "emergency_response": str(report.get("emergency_response", "")).strip() or "暂无",
-        "attack_path_assessment": str(report.get("attack_path_assessment", "")).strip() or "暂无",
         "key_work_content": str(report.get("key_work_content", "")).strip() or "暂无",
+        "legacy_items": str(report.get("legacy_items", "")).strip() or "暂无",
         "operator_group": "运营人员" if any(op for op in operators) else "",
         "operator_shared_responsibility": shared_responsibility,
         "operator_1_name": str(normalized_operators[0].get("name", "")),
@@ -506,15 +506,15 @@ def _add_secmaster_detail(doc: Document, report: dict) -> None:
 
 
 def _add_section_3(doc: Document, report: dict) -> None:
-    _add_section_heading(doc, "三、攻击路径评估")
-    _add_para(doc, str(report.get("attack_path_assessment", "")))
-    _add_optional_screenshot(doc, report.get("attack_path_screenshot_path", ""))
+    _add_section_heading(doc, "三、重点工作内容")
+    _add_para(doc, str(report.get("key_work_content", "")))
+    _add_optional_screenshot(doc, report.get("key_work_screenshot_path", ""))
 
 
 def _add_section_4(doc: Document, report: dict) -> None:
-    _add_section_heading(doc, "四、重点工作内容")
-    _add_para(doc, str(report.get("key_work_content", "")))
-    _add_optional_screenshot(doc, report.get("key_work_screenshot_path", ""))
+    _add_section_heading(doc, "四、遗留事项")
+    _add_para(doc, str(report.get("legacy_items", "")))
+    _add_optional_screenshot(doc, report.get("legacy_items_screenshot_path", ""))
 
 
 def _add_section_5(doc: Document, operators: list[dict]) -> None:

@@ -235,7 +235,7 @@ class DocxGenerationTests(TestCase):
             "secmaster_detail_info": 0,
             "secmaster_unclosed_event_count": 8,
             "emergency_response": "无。",
-            "attack_path_assessment": "暂无",
+            "legacy_items": "暂无",
             "key_work_content": "暂无",
         }
         operators = [
@@ -319,8 +319,8 @@ class DocxGenerationTests(TestCase):
             "secmaster_detail_info": 0,
             "secmaster_unclosed_event_count": 8,
             "emergency_response": "无。",
-            "attack_path_assessment": "攻击路径分析暂无异常。",
             "key_work_content": "今日已完成重点巡检。",
+            "legacy_items": "攻击路径分析暂无异常。",
         }
         operators = [
             {"name": "张三", "phone": "13800138000", "role": "安全运营人员", "responsibility": "负责安全监控。"},
@@ -338,8 +338,8 @@ class DocxGenerationTests(TestCase):
             self.assertIn("趋势平稳。总体态势良好。", table.rows[2].cells[0].paragraphs[2].text)
             self.assertIn("监控时间：2026年5月20日 18:00~2026年5月21日 18:00", table.rows[3].cells[0].paragraphs[0].text)
             self.assertIn("未闭环事件12次", table.rows[4].cells[0].paragraphs[13].text)
-            self.assertEqual(table.rows[6].cells[0].paragraphs[0].text, "攻击路径分析暂无异常。")
-            self.assertEqual(table.rows[8].cells[0].paragraphs[0].text, "今日已完成重点巡检。")
+            self.assertEqual(table.rows[6].cells[0].paragraphs[0].text, "今日已完成重点巡检。")
+            self.assertEqual(table.rows[8].cells[0].paragraphs[0].text, "攻击路径分析暂无异常。")
 
             operator_table = table.rows[10].cells[0].tables[0]
             self.assertEqual(len(operator_table.rows), 5)
@@ -394,7 +394,7 @@ class DocxGenerationTests(TestCase):
             "secmaster_detail_info": 0,
             "secmaster_unclosed_event_count": 8,
             "emergency_response": "无。",
-            "attack_path_assessment": "攻击路径分析暂无异常。",
+            "legacy_items": "攻击路径分析暂无异常。",
             "key_work_content": "今日已完成重点巡检。",
         }
 
@@ -464,7 +464,7 @@ class DocxGenerationTests(TestCase):
             "secmaster_detail_info": 0,
             "secmaster_unclosed_event_count": 8,
             "emergency_response": "无。",
-            "attack_path_assessment": "攻击路径分析暂无异常。",
+            "legacy_items": "攻击路径分析暂无异常。",
             "key_work_content": "今日已完成重点巡检。",
         }
         operators = [
@@ -569,7 +569,7 @@ class DocxGenerationTests(TestCase):
             "secmaster_detail_info": 0,
             "secmaster_unclosed_event_count": 8,
             "emergency_response": "无。",
-            "attack_path_assessment": "攻击路径分析暂无异常。",
+            "legacy_items": "攻击路径分析暂无异常。",
             "key_work_content": "今日已完成重点巡检。",
         }
 
@@ -646,7 +646,7 @@ class DocxGenerationTests(TestCase):
             "secmaster_detail_info": 0,
             "secmaster_unclosed_event_count": 8,
             "emergency_response": "无。",
-            "attack_path_assessment": "攻击路径分析暂无异常。",
+            "legacy_items": "攻击路径分析暂无异常。",
             "key_work_content": "今日已完成重点巡检。",
         }
 
@@ -716,7 +716,7 @@ class DocxGenerationTests(TestCase):
             "secmaster_detail_info": 0,
             "secmaster_unclosed_event_count": 8,
             "emergency_response": "无。",
-            "attack_path_assessment": "攻击路径分析暂无异常。",
+            "legacy_items": "攻击路径分析暂无异常。",
             "key_work_content": "今日已完成重点巡检。",
         }
         operators = [
@@ -797,7 +797,7 @@ class DocxGenerationTests(TestCase):
             "secmaster_detail_info": 0,
             "secmaster_unclosed_event_count": 8,
             "emergency_response": "无。",
-            "attack_path_assessment": "攻击路径分析暂无异常。",
+            "legacy_items": "攻击路径分析暂无异常。",
             "key_work_content": "今日已完成重点巡检。",
         }
         operators = [
@@ -841,7 +841,7 @@ class DocxGenerationTests(TestCase):
             "secmaster_unclosed_event_count": 0,
             "business_stability": "", "trend_comparison": "", "overall_assessment": "",
             "monitor_start": "", "monitor_end": "",
-            "emergency_response": "", "attack_path_assessment": "", "key_work_content": "",
+            "emergency_response": "", "legacy_items": "", "key_work_content": "",
         }
 
         with TemporaryDirectory() as temp_dir:

@@ -362,35 +362,14 @@
         </div>
     </div>
 
-    {# --- Section 3: 攻击路径评估 --- #}
+    {# --- Section 3: 重点工作内容 --- #}
     <div>
-        <h2 class="section-card-title">三、攻击路径评估</h2>
-        <label class="form-field">
-            <textarea class="form-control" name="attack_path_assessment" rows="2" placeholder="暂无">{{ report.attack_path_assessment if report else '暂无' }}</textarea>
-        </label>
-        <label class="form-field">
-            <div class="paste-zone" tabindex="0" data-section="attack-path">
-                <input type="hidden" name="attack_path_screenshot_path_value" value="{{ report.attack_path_screenshot_path if report else '' }}">
-                <div class="paste-zone-preview" id="preview-attack-path">
-                    {% if report and report.attack_path_screenshot_path %}
-                    <img src="/daily-report/screenshots/{{ report_date }}/attack-path" alt="截图预览">
-                    {% endif %}
-                </div>
-                <div class="paste-zone-hint">
-                    <span class="paste-zone-label">截图（可选）</span>
-                    <span class="paste-zone-action">点击框体获取焦点 → Ctrl+V 粘贴 | 双击选择文件 | 拖拽图片</span>
-                </div>
-                <input type="file" class="paste-zone-file" name="attack_path_screenshot_path" accept="image/png,image/jpeg,image/webp" hidden>
-            </div>
-    </div>
-
-    {# --- Section 4: 重点工作内容 --- #}
-    <div>
-        <h2 class="section-card-title">四、重点工作内容</h2>
+        <h2 class="section-card-title">三、重点工作内容</h2>
         <label class="form-field">
             <textarea class="form-control" name="key_work_content" rows="3" placeholder="暂无">{{ report.key_work_content if report else '暂无' }}</textarea>
         </label>
-        <div class="paste-zone" tabindex="0" data-section="key-work">
+        <label class="form-field">
+            <div class="paste-zone" tabindex="0" data-section="key-work">
                 <input type="hidden" name="key_work_screenshot_path_value" value="{{ report.key_work_screenshot_path if report else '' }}">
                 <div class="paste-zone-preview" id="preview-key-work">
                     {% if report and report.key_work_screenshot_path %}
@@ -402,6 +381,27 @@
                     <span class="paste-zone-action">点击框体获取焦点 → Ctrl+V 粘贴 | 双击选择文件 | 拖拽图片</span>
                 </div>
                 <input type="file" class="paste-zone-file" name="key_work_screenshot_path" accept="image/png,image/jpeg,image/webp" hidden>
+            </div>
+    </div>
+
+    {# --- Section 4: 遗留事项 --- #}
+    <div>
+        <h2 class="section-card-title">四、遗留事项</h2>
+        <label class="form-field">
+            <textarea class="form-control" name="legacy_items" rows="3" placeholder="暂无">{{ report.legacy_items if report else '暂无' }}</textarea>
+        </label>
+        <div class="paste-zone" tabindex="0" data-section="legacy-items">
+                <input type="hidden" name="legacy_items_screenshot_path_value" value="{{ report.legacy_items_screenshot_path if report else '' }}">
+                <div class="paste-zone-preview" id="preview-legacy-items">
+                    {% if report and report.legacy_items_screenshot_path %}
+                    <img src="/daily-report/screenshots/{{ report_date }}/legacy-items" alt="截图预览">
+                    {% endif %}
+                </div>
+                <div class="paste-zone-hint">
+                    <span class="paste-zone-label">截图（可选）</span>
+                    <span class="paste-zone-action">点击框体获取焦点 → Ctrl+V 粘贴 | 双击选择文件 | 拖拽图片</span>
+                </div>
+                <input type="file" class="paste-zone-file" name="legacy_items_screenshot_path" accept="image/png,image/jpeg,image/webp" hidden>
             </div>
     </div>
 
