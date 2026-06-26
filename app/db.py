@@ -679,17 +679,21 @@ def save_daily_report(report_date: str, payload: dict[str, object], operator_nam
         "emergency_response", "emergency_response_screenshot_path", "attack_path_assessment", "attack_path_screenshot_path", "key_work_content", "key_work_screenshot_path", "legacy_items", "legacy_items_screenshot_path",
     ]
 
+    int_fields = {f for f in fields if f.endswith(('_attacks','_blocked','_banned','_unblocked',
+        '_alerts','_cleanings','_blackholes','_total','_fatal','_high','_medium','_low',
+        '_info','_count','_value','_spec','_exceeded'))} | {'waf_exceeded_spec','cfw_exceeded_spec'}
+
     with get_connection() as connection:
         if existing:
             set_clause = ", ".join(f"{f} = ?" for f in fields)
-            values = [payload.get(f, "") for f in fields] + [now, existing["id"]]
+            values = [0 if f in int_fields and str(payload.get(f, "")).strip() == "" else payload.get(f, "") for f in fields] + [now, existing["id"]]
             connection.execute(
                 f"UPDATE daily_security_reports SET {set_clause}, updated_at = ? WHERE id = ?",
                 tuple(values),
             )
         else:
             placeholders = ", ".join("?" for _ in fields)
-            values = [payload.get(f, "") for f in fields] + [operator_name, now, now]
+            values = [0 if f in int_fields and str(payload.get(f, "")).strip() == "" else payload.get(f, "") for f in fields] + [operator_name, now, now]
             connection.execute(
                 f"INSERT INTO daily_security_reports (report_date, {', '.join(fields)}, operator_name, created_at, updated_at) VALUES (?, {placeholders}, ?, ?, ?)",
                 tuple([report_date] + values),
