@@ -203,8 +203,13 @@ async def api_save_daily_report(request: Request):
     if not isinstance(user, dict):
         raise HTTPException(status_code=401, detail="未登录")
 
-    form = await request.form()
-    data = {k: v for k, v in form.items() if not hasattr(v, 'filename')}
+    try:
+        form = await request.form()
+        data = {k: v for k, v in form.items() if not hasattr(v, 'filename')}
+    except Exception as _e:
+        with open('/tmp/save_error.log', 'w') as _f:
+            _f.write(f'form_parse_error: {_e}\n')
+        raise
 
     from datetime import date
     from ..routers.daily_report import NUMERIC_FIELDS, SUMMARY_FIELD_MAPPINGS
@@ -226,7 +231,13 @@ async def api_save_daily_report(request: Request):
             data[key] = 0
 
     report_date = data.pop("report_date", "") or date.today().isoformat()
-    db.save_daily_report(report_date, data, user.get("display_name") or user.get("username", "admin"))
+    try:
+        db.save_daily_report(report_date, data, user.get("display_name") or user.get("username", "admin"))
+    except Exception as _e:
+        with open('/tmp/save_error.log', 'w') as _f:
+            import traceback
+            _f.write(traceback.format_exc())
+        raise
 
     return {"success": True}
 
