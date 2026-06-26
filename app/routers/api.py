@@ -235,6 +235,107 @@ async def api_save_daily_report(request: Request):
     return {"success": True}
 
 
+def _docx_to_html(docx_path: str) -> str:
+    """Read DOCX and convert to HTML (paragraphs, tables, inline images)."""
+    import base64 as _b64
+    from docx import Document as DocxReader
+    from docx.oxml.ns import qn
+
+    doc = DocxReader(docx_path)
+
+    # Build image lookup: rel_id → base64 data URI
+    images: dict[str, str] = {}
+    for rel in doc.part.rels.values():
+        if "image" in rel.reltype:
+            try:
+                ext = rel.target_ref.split('.')[-1].lower()
+                mime = 'image/jpeg' if ext in ('jpg','jpeg') else 'image/png' if ext == 'png' else 'image/webp' if ext == 'webp' else 'image/png'
+                images[rel.rId] = f"data:{mime};base64,{_b64.b64encode(rel.target_part.blob).decode()}"
+            except Exception:
+                pass
+
+    parts: list[str] = []
+
+    for child in doc.element.body:
+        tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+        if tag == 'p':
+            # Paragraph
+            para = None
+            for p in doc.paragraphs:
+                if p._element is child: para = p; break
+            if para is None: continue
+
+            drawings = child.findall('.//' + qn('w:drawing'))
+            for drawing in drawings:
+                blip = drawing.find('.//' + qn('a:blip'))
+                if blip is not None:
+                    embed_id = blip.get(qn('r:embed'))
+                    if embed_id and embed_id in images:
+                        parts.append(f'<p style="margin:8px 0"><img src="{images[embed_id]}" style="max-width:100%"></p>')
+
+            text = para.text.strip()
+            if not text:
+                parts.append('<br>')
+            else:
+                is_heading = para.style.name.startswith('Heading') if para.style else False
+                pPr = child.find(qn('w:pPr'))
+                jc = pPr.find(qn('w:jc')) if pPr is not None else None
+                align = jc.get(qn('w:val')) if jc is not None else ""
+                align_style = "text-align:center" if align == "center" else "text-align:right" if align == "right" else ""
+                if is_heading:
+                    parts.append(f'<h3 style="margin:16px 0 8px;font-size:15px;{align_style}">{text}</h3>')
+                elif para.runs and para.runs[0].bold:
+                    parts.append(f'<p style="margin:4px 0;{align_style}"><strong>{text}</strong></p>')
+                else:
+                    parts.append(f'<p style="margin:4px 0;text-indent:2em;{align_style}">{text}</p>')
+        elif tag == 'tbl':
+            rows_data: list[list[str]] = []
+            for row_el in child.findall(qn('w:tr')):
+                cells: list[str] = []
+                for cell_el in row_el.findall(qn('w:tc')):
+                    ct = []
+                    for p_el in cell_el.findall(qn('w:p')):
+                        ct.append(''.join(t.text or '' for t in p_el.findall('.//' + qn('w:t'))))
+                    cells.append(''.join(ct))
+                rows_data.append(cells)
+            if rows_data:
+                cells_html = ''.join(
+                    '<tr>' + ''.join(f'<td style="border:1px solid #d1d5db;padding:4px 8px;font-size:13px">{c}</td>' for c in row) + '</tr>'
+                    for row in rows_data
+                )
+                parts.append(f'<table style="border-collapse:collapse;margin:8px 0;width:100%">{cells_html}</table>')
+
+    return ''.join(parts)
+
+
+@router.get("/daily-report/preview")
+async def api_preview_daily_report(request: Request, report_date: str = ""):
+    """Preview daily report as HTML (from DOCX)."""
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+
+    from datetime import date
+    from ..services.docx_generator import generate_daily_report_docx
+
+    if not report_date:
+        report_date = date.today().isoformat()
+    report = db.get_daily_report_by_date(report_date)
+    if not report:
+        raise HTTPException(status_code=404, detail="未找到该日期的日报")
+
+    docx_path = generate_daily_report_docx(report_date, report)
+    html_body = _docx_to_html(docx_path)
+
+    from fastapi.responses import HTMLResponse
+    html = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+body{{font-family:"Microsoft YaHei","PingFang SC",sans-serif;font-size:14px;color:#1f2937;line-height:1.8;padding:20px;max-width:860px;margin:0 auto}}
+h3{{font-size:15px}}
+</style></head><body>{html_body}</body></html>"""
+    return HTMLResponse(content=html)
+
+
 @router.get("/daily-report/download")
 async def api_download_daily_report(request: Request, report_date: str = ""):
     """Download daily report DOCX."""
@@ -306,105 +407,14 @@ async def api_send_daily_report_email(request: Request):
     if not subject:
         subject = f"安全运营日报 - {date_display}"
 
-    # Read DOCX content as-is for email body
-    import base64 as _b64, re as _re
-    from docx import Document as DocxReader
-    from docx.opc.constants import RELATIONSHIP_TYPE as RT
-    doc = DocxReader(docx_path)
-    image_count = 0
-
-    # Build image lookup: rel_id → base64 data URI
-    images: dict[str, str] = {}
-    for rel in doc.part.rels.values():
-        if "image" in rel.reltype:
-            try:
-                ext = rel.target_ref.split('.')[-1].lower()
-                mime = 'image/jpeg' if ext in ('jpg','jpeg') else 'image/png' if ext == 'png' else 'image/webp' if ext == 'webp' else 'image/png'
-                images[rel.rId] = f"data:{mime};base64,{_b64.b64encode(rel.target_part.blob).decode()}"
-            except Exception:
-                pass
-
-    body_parts: list[str] = []
-
-    def _add_para(text: str, bold: bool = False, align: str = "") -> None:
-        style = "margin:4px 0"
-        if align == "center": style += ";text-align:center"
-        if bold: text = f"<strong>{text}</strong>"
-        body_parts.append(f'<p style="{style}">{text}</p>')
-
-    # Iterate through document body elements in order
-    from docx.oxml.ns import qn
-    body_el = doc.element.body
-    for child in body_el:
-        tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
-        if tag == 'p':
-            # Paragraph
-            para = None
-            for p in doc.paragraphs:
-                if p._element is child:
-                    para = p
-                    break
-            if para is None:
-                continue
-
-            # Check for inline images
-            drawings = child.findall('.//' + qn('w:drawing'))
-            has_image = False
-            for drawing in drawings:
-                blip = drawing.find('.//' + qn('a:blip'))
-                if blip is not None:
-                    embed_id = blip.get(qn('r:embed'))
-                    if embed_id and embed_id in images:
-                        image_count += 1
-                        body_parts.append(f'<p style="margin:8px 0"><img src="{images[embed_id]}" style="max-width:100%" alt="图片{image_count}"></p>')
-                        has_image = True
-
-            text = para.text.strip()
-            if not text and not has_image:
-                body_parts.append('<br>')
-            elif text:
-                is_heading = para.style.name.startswith('Heading') if para.style else False
-                if is_heading:
-                    body_parts.append(f'<h3 style="margin:16px 0 8px;font-size:15px">{text}</h3>')
-                else:
-                    # Check alignment
-                    pPr = child.find(qn('w:pPr'))
-                    jc = pPr.find(qn('w:jc')) if pPr is not None else None
-                    align = jc.get(qn('w:val')) if jc is not None else ""
-                    align_map = {"center": "center", "right": "right"}
-                    _add_para(text, align=align_map.get(align, ""))
-
-        elif tag == 'tbl':
-            # Table
-            rows_data: list[list[str]] = []
-            for row_el in child.findall(qn('w:tr')):
-                cells: list[str] = []
-                for cell_el in row_el.findall(qn('w:tc')):
-                    cell_text_parts = []
-                    for p_el in cell_el.findall(qn('w:p')):
-                        t_els = p_el.findall('.//' + qn('w:t'))
-                        cell_text_parts.append(''.join(t.text or '' for t in t_els))
-                    cells.append(''.join(cell_text_parts))
-                rows_data.append(cells)
-
-            if rows_data:
-                cells_html = ''.join(
-                    '<tr>' + ''.join(
-                        f'<td style="border:1px solid #d1d5db;padding:4px 8px;font-size:13px">{c}</td>'
-                        for c in row
-                    ) + '</tr>'
-                    for row in rows_data
-                )
-                body_parts.append(
-                    f'<table style="border-collapse:collapse;margin:8px 0;width:100%">{cells_html}</table>'
-                )
-
+    # Read DOCX content as email body
+    html_content = _docx_to_html(docx_path)
     html = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
 body{{font-family:"Microsoft YaHei","PingFang SC",sans-serif;font-size:14px;color:#1f2937;line-height:1.8;padding:20px}}
 h3{{font-size:15px}}
 </style></head><body>
-{''.join(body_parts)}
+{html_content}
 <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;color:#9ca3af;font-size:12px">此邮件由报告管理工具自动发送 · 附件为 Word 文档</div>
 </body></html>"""
 
