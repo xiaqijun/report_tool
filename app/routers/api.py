@@ -278,7 +278,7 @@ async def api_preview_daily_report(request: Request, report_date: str = ""):
     tmpdir = tempfile.mkdtemp()
     shutil.copy(str(docx_path), f"{tmpdir}/report.docx")
     subprocess.run(
-        ['soffice', '--headless', '--convert-to', 'pdf', '--outdir', tmpdir, f"{tmpdir}/report.docx"],
+        ['/usr/bin/soffice', '--headless', '--convert-to', 'pdf', '--outdir', tmpdir, f"{tmpdir}/report.docx"],
         capture_output=True, timeout=30
     )
     pdf_path = f"{tmpdir}/report.pdf"
