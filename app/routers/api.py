@@ -203,13 +203,16 @@ async def api_save_daily_report(request: Request):
     if not isinstance(user, dict):
         raise HTTPException(status_code=401, detail="未登录")
 
+    import json as _json
+    content_type = request.headers.get("content-type", "")
     form = await request.form()
     data = {k: v for k, v in form.items() if not hasattr(v, 'filename')}
-    # DEBUG: log received form data
     with open('/tmp/save_debug.log', 'w') as _f:
-        _f.write(f'keys={list(data.keys())}\ncount={len(data)}\n')
+        _f.write(f'content-type: {content_type}\n')
+        _f.write(f'form_keys: {list(data.keys())}\n')
+        _f.write(f'form_count: {len(data)}\n')
         for _k, _v in data.items():
-            _f.write(f'  {_k}={repr(_v)}\n')
+            _f.write(f'  {_k}={repr(_v)[:100]}\n')
 
     from datetime import date
     from ..routers.daily_report import NUMERIC_FIELDS, SUMMARY_FIELD_MAPPINGS
