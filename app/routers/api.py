@@ -284,8 +284,11 @@ async def api_preview_daily_report(request: Request, report_date: str = ""):
         )
         pdf_path = f"{tmpdir}/report.pdf"
         from fastapi.responses import FileResponse
-        return FileResponse(pdf_path, media_type="application/pdf",
-                           filename=f"安全运营日报-{report_date}.pdf")
+        from fastapi.responses import Response
+        with open(pdf_path, 'rb') as _pf:
+            pdf_bytes = _pf.read()
+        return Response(content=pdf_bytes, media_type="application/pdf",
+                       headers={"Content-Disposition": f"inline; filename=安全运营日报-{report_date}.pdf"})
     except Exception:
         # Fallback to HTML if PDF conversion fails
         html_body = _docx_to_html(docx_path)
