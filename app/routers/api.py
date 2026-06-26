@@ -286,7 +286,8 @@ async def api_preview_daily_report(request: Request, report_date: str = ""):
         raise HTTPException(status_code=404, detail="未找到该日期的日报")
 
     import subprocess, os as _os
-    export_dir = str(BASE_DIR / "data" / "exports" / "daily")
+    from pathlib import Path as _Path
+    export_dir = str(_Path(__file__).resolve().parent.parent.parent / "data" / "exports" / "daily")
     docx_path_str = _os.path.join(export_dir, f"{report_date}.docx")
     pdf_path_str = _os.path.join(export_dir, f"{report_date}.pdf")
 
