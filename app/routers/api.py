@@ -285,19 +285,25 @@ async def api_preview_daily_report(request: Request, report_date: str = ""):
     if not report:
         raise HTTPException(status_code=404, detail="未找到该日期的日报")
 
-    docx_path = generate_daily_report_docx(report, db.list_ops_personnel())
+    import subprocess, os as _os
+    export_dir = str(BASE_DIR / "data" / "exports" / "daily")
+    docx_path_str = _os.path.join(export_dir, f"{report_date}.docx")
+    pdf_path_str = _os.path.join(export_dir, f"{report_date}.pdf")
 
-    # Convert to PDF via LibreOffice
-    import subprocess, tempfile, shutil
-    tmpdir = tempfile.mkdtemp()
-    shutil.copy(str(docx_path), f"{tmpdir}/report.docx")
-    subprocess.run(
-        ['/usr/bin/soffice', '--headless', '--convert-to', 'pdf', '--outdir', tmpdir, f"{tmpdir}/report.docx"],
-        capture_output=True, timeout=30
-    )
-    pdf_path = f"{tmpdir}/report.pdf"
+    # Generate DOCX if not cached
+    if not _os.path.exists(docx_path_str):
+        docx_path_str = str(generate_daily_report_docx(report, db.list_ops_personnel()))
+
+    # Convert to PDF if not cached
+    if not _os.path.exists(pdf_path_str):
+        subprocess.run(
+            ['/usr/bin/soffice', '--headless', '--convert-to', 'pdf',
+             '--outdir', export_dir, docx_path_str],
+            capture_output=True, timeout=30
+        )
+
     from fastapi.responses import Response
-    with open(pdf_path, 'rb') as _pf:
+    with open(pdf_path_str, 'rb') as _pf:
         pdf_bytes = _pf.read()
     return Response(content=pdf_bytes, media_type="application/pdf",
                    headers={"Content-Disposition": f"inline; filename=report-{report_date}.pdf"})
