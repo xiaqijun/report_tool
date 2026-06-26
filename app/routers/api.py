@@ -209,7 +209,7 @@ async def api_save_daily_report(request: Request):
     from datetime import date
 
     report_date = data.pop("report_date", "") or date.today().isoformat()
-    db.save_daily_report(report_date, data)
+    db.save_daily_report(report_date, data, user.get("display_name") or user.get("username", "admin"))
 
     return {"success": True}
 
