@@ -254,56 +254,47 @@ def _docx_to_html(docx_path: str) -> str:
             except Exception:
                 pass
 
-    parts: list[str] = []
+    def _para_text(p_el) -> str:
+        return ''.join(t.text or '' for t in p_el.findall('.//' + qn('w:t'))).strip()
 
+    def _para_img(p_el) -> str:
+        r = ''
+        for d in p_el.findall('.//' + qn('w:drawing')):
+            blip = d.find('.//' + qn('a:blip'))
+            if blip is not None:
+                eid = blip.get(qn('r:embed'))
+                if eid and eid in images:
+                    r += f'<img src="{images[eid]}" style="max-width:100%;margin:6px 0">'
+        return r
+
+    def _format_para(p_el, indent: bool = True) -> str:
+        text = _para_text(p_el)
+        img = _para_img(p_el)
+        if not text and not img: return '<br>'
+        pPr = p_el.find(qn('w:pPr'))
+        jc = pPr.find(qn('w:jc')) if pPr is not None else None
+        align = jc.get(qn('w:val')) if jc is not None else ""
+        s = "text-align:center" if align == 'center' else "text-align:right" if align == 'right' else ""
+        bold = any(r.find(qn('w:rPr')) is not None and r.find(qn('w:rPr')).find(qn('w:b')) is not None for r in p_el.findall(qn('w:r')))
+        tag = f'<strong>{text}</strong>' if bold else text
+        indent_s = 'text-indent:2em;' if indent else ''
+        return f'<p style="margin:4px 0;{indent_s}{s}">{tag}</p>{img}'
+
+    parts: list[str] = []
     for child in doc.element.body:
         tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
         if tag == 'p':
-            # Paragraph
             para = None
             for p in doc.paragraphs:
                 if p._element is child: para = p; break
-            if para is None: continue
-
-            drawings = child.findall('.//' + qn('w:drawing'))
-            for drawing in drawings:
-                blip = drawing.find('.//' + qn('a:blip'))
-                if blip is not None:
-                    embed_id = blip.get(qn('r:embed'))
-                    if embed_id and embed_id in images:
-                        parts.append(f'<p style="margin:8px 0"><img src="{images[embed_id]}" style="max-width:100%"></p>')
-
-            text = para.text.strip()
-            if not text:
-                parts.append('<br>')
+            if para and para.style.name.startswith('Heading'):
+                parts.append(f'<h3 style="margin:16px 0 8px;font-size:15px">{_para_text(child)}</h3>')
             else:
-                is_heading = para.style.name.startswith('Heading') if para.style else False
-                pPr = child.find(qn('w:pPr'))
-                jc = pPr.find(qn('w:jc')) if pPr is not None else None
-                align = jc.get(qn('w:val')) if jc is not None else ""
-                align_style = "text-align:center" if align == "center" else "text-align:right" if align == "right" else ""
-                if is_heading:
-                    parts.append(f'<h3 style="margin:16px 0 8px;font-size:15px;{align_style}">{text}</h3>')
-                elif para.runs and para.runs[0].bold:
-                    parts.append(f'<p style="margin:4px 0;{align_style}"><strong>{text}</strong></p>')
-                else:
-                    parts.append(f'<p style="margin:4px 0;text-indent:2em;{align_style}">{text}</p>')
+                parts.append(_format_para(child))
         elif tag == 'tbl':
-            rows_data: list[list[str]] = []
-            for row_el in child.findall(qn('w:tr')):
-                cells: list[str] = []
-                for cell_el in row_el.findall(qn('w:tc')):
-                    ct = []
-                    for p_el in cell_el.findall(qn('w:p')):
-                        ct.append(''.join(t.text or '' for t in p_el.findall('.//' + qn('w:t'))))
-                    cells.append(''.join(ct))
-                rows_data.append(cells)
-            if rows_data:
-                cells_html = ''.join(
-                    '<tr>' + ''.join(f'<td style="border:1px solid #d1d5db;padding:4px 8px;font-size:13px">{c}</td>' for c in row) + '</tr>'
-                    for row in rows_data
-                )
-                parts.append(f'<table style="border-collapse:collapse;margin:8px 0;width:100%">{cells_html}</table>')
+            for p_el in child.findall('.//' + qn('w:p')):
+                parts.append(_format_para(p_el, indent=False))
+            parts.append('<br>')
 
     return ''.join(parts)
 
