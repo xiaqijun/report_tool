@@ -236,67 +236,23 @@ async def api_save_daily_report(request: Request):
 
 
 def _docx_to_html(docx_path: str) -> str:
-    """Read DOCX and convert to HTML (paragraphs, tables, inline images)."""
-    import base64 as _b64
+    """Convert DOCX to HTML using pandoc."""
+    import subprocess, base64 as _b64
     from docx import Document as DocxReader
-    from docx.oxml.ns import qn
 
-    doc = DocxReader(docx_path)
-
-    # Build image lookup: rel_id → base64 data URI
-    images: dict[str, str] = {}
-    for rel in doc.part.rels.values():
-        if "image" in rel.reltype:
-            try:
-                ext = rel.target_ref.split('.')[-1].lower()
-                mime = 'image/jpeg' if ext in ('jpg','jpeg') else 'image/png' if ext == 'png' else 'image/webp' if ext == 'webp' else 'image/png'
-                images[rel.rId] = f"data:{mime};base64,{_b64.b64encode(rel.target_part.blob).decode()}"
-            except Exception:
-                pass
-
-    def _para_text(p_el) -> str:
-        return ''.join(t.text or '' for t in p_el.findall('.//' + qn('w:t'))).strip()
-
-    def _para_img(p_el) -> str:
-        r = ''
-        for d in p_el.findall('.//' + qn('w:drawing')):
-            blip = d.find('.//' + qn('a:blip'))
-            if blip is not None:
-                eid = blip.get(qn('r:embed'))
-                if eid and eid in images:
-                    r += f'<img src="{images[eid]}" style="max-width:100%;margin:6px 0">'
-        return r
-
-    def _format_para(p_el, indent: bool = True) -> str:
-        text = _para_text(p_el)
-        img = _para_img(p_el)
-        if not text and not img: return '<br>'
-        pPr = p_el.find(qn('w:pPr'))
-        jc = pPr.find(qn('w:jc')) if pPr is not None else None
-        align = jc.get(qn('w:val')) if jc is not None else ""
-        s = "text-align:center" if align == 'center' else "text-align:right" if align == 'right' else ""
-        bold = any(r.find(qn('w:rPr')) is not None and r.find(qn('w:rPr')).find(qn('w:b')) is not None for r in p_el.findall(qn('w:r')))
-        tag = f'<strong>{text}</strong>' if bold else text
-        indent_s = 'text-indent:2em;' if indent else ''
-        return f'<p style="margin:4px 0;{indent_s}{s}">{tag}</p>{img}'
-
-    parts: list[str] = []
-    for child in doc.element.body:
-        tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
-        if tag == 'p':
-            para = None
-            for p in doc.paragraphs:
-                if p._element is child: para = p; break
-            if para and para.style.name.startswith('Heading'):
-                parts.append(f'<h3 style="margin:16px 0 8px;font-size:15px">{_para_text(child)}</h3>')
-            else:
-                parts.append(_format_para(child))
-        elif tag == 'tbl':
-            for p_el in child.findall('.//' + qn('w:p')):
-                parts.append(_format_para(p_el, indent=False))
-            parts.append('<br>')
-
-    return ''.join(parts)
+    # Use pandoc for high-fidelity conversion, embedding images as base64
+    result = subprocess.run(
+        ['pandoc', docx_path, '-f', 'docx', '-t', 'html', '--embed-resources', '--standalone'],
+        capture_output=True, text=True, timeout=30
+    )
+    if result.returncode == 0 and result.stdout.strip():
+        # Extract body content from pandoc's standalone HTML
+        import re
+        body_match = re.search(r'<body[^>]*>(.*)</body>', result.stdout, re.DOTALL)
+        if body_match:
+            return body_match.group(1)
+        return result.stdout
+    raise RuntimeError(f"pandoc failed: {result.stderr}")
 
 
 @router.get("/daily-report/preview")
