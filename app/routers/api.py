@@ -203,13 +203,8 @@ async def api_save_daily_report(request: Request):
     if not isinstance(user, dict):
         raise HTTPException(status_code=401, detail="未登录")
 
-    try:
-        form = await request.form()
-        data = {k: v for k, v in form.items() if not hasattr(v, 'filename')}
-    except Exception as _e:
-        with open('/tmp/save_error.log', 'w') as _f:
-            _f.write(f'form_parse_error: {_e}\n')
-        raise
+    form = await request.form()
+    data = {k: v for k, v in form.items() if not hasattr(v, 'filename')}
 
     from datetime import date
     from ..routers.daily_report import NUMERIC_FIELDS, SUMMARY_FIELD_MAPPINGS
@@ -229,15 +224,13 @@ async def api_save_daily_report(request: Request):
             data[key] = int(data.get(key, 0) or 0)
         except (ValueError, TypeError):
             data[key] = 0
+    # Coerce boolean strings from Switch fields
+    for key in ('waf_exceeded_spec', 'cfw_exceeded_spec'):
+        v = str(data.get(key, '')).lower()
+        data[key] = 1 if v == 'true' else 0 if v == 'false' else int(data.get(key, 0) or 0)
 
     report_date = data.pop("report_date", "") or date.today().isoformat()
-    try:
-        db.save_daily_report(report_date, data, user.get("display_name") or user.get("username", "admin"))
-    except Exception as _e:
-        with open('/tmp/save_error.log', 'w') as _f:
-            import traceback
-            _f.write(traceback.format_exc())
-        raise
+    db.save_daily_report(report_date, data, user.get("display_name") or user.get("username", "admin"))
 
     return {"success": True}
 
