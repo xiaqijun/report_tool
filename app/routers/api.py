@@ -307,7 +307,10 @@ async def api_preview_daily_report(request: Request, report_date: str = ""):
     with open(pdf_path_str, 'rb') as _pf:
         pdf_bytes = _pf.read()
     return Response(content=pdf_bytes, media_type="application/pdf",
-                   headers={"Content-Disposition": f"inline; filename=report-{report_date}.pdf"})
+                   headers={
+                       "Content-Disposition": f"inline; filename=report-{report_date}.pdf",
+                       "Cache-Control": "no-cache, no-store, must-revalidate",
+                   })
 
 
 @router.get("/daily-report/download")
