@@ -324,7 +324,7 @@ async def api_preview_daily_report(request: Request, report_date: str = ""):
     if not report:
         raise HTTPException(status_code=404, detail="未找到该日期的日报")
 
-    docx_path = generate_daily_report_docx(report_date, report)
+    docx_path = generate_daily_report_docx(report, db.list_ops_personnel())
     html_body = _docx_to_html(docx_path)
 
     from fastapi.responses import HTMLResponse
@@ -353,7 +353,7 @@ async def api_download_daily_report(request: Request, report_date: str = ""):
     if not report:
         raise HTTPException(status_code=404, detail="未找到该日期的日报")
 
-    file_path = generate_daily_report_docx(report_date, report)
+    file_path = generate_daily_report_docx(report, db.list_ops_personnel())
     return FileResponse(
         file_path,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -388,7 +388,7 @@ async def api_send_daily_report_email(request: Request):
         raise HTTPException(status_code=404, detail="该日期无日报数据，请先保存")
 
     # Generate DOCX
-    docx_path = generate_daily_report_docx(report_date, report)
+    docx_path = generate_daily_report_docx(report, db.list_ops_personnel())
 
     # Get email settings
     email_settings = db.get_email_settings() or {}
