@@ -81,6 +81,11 @@ def _today_str() -> str:
     return datetime.now().strftime("%Y-%m-%d")
 
 
+def _resolve_report_date(report_date: str | None) -> str:
+    candidate = (report_date or "").strip()
+    return candidate or _today_str()
+
+
 def _coerce_int(value: str) -> int:
     stripped = value.strip()
     if not stripped:
@@ -203,21 +208,22 @@ def _llm_settings_context(request: Request, current_user: dict[str, object], for
 
 
 @router.get("/daily-report", response_class=HTMLResponse, response_model=None)
-async def daily_report_form(request: Request) -> Response:
+async def daily_report_form(request: Request, date: str | None = None) -> Response:
     current_user = require_login(request)
     if isinstance(current_user, RedirectResponse):
         return current_user
 
-    today = _today_str()
-    report = _with_synced_summary_fields(get_daily_report_by_date(today))
-    previous = _with_synced_summary_fields(get_previous_report(today))
+    report_date = _resolve_report_date(date)
+    report = _with_synced_summary_fields(get_daily_report_by_date(report_date))
+    previous = _with_synced_summary_fields(get_previous_report(report_date))
     operators = list_ops_personnel()
     trends = _compute_trends(report or {}, previous)
 
     from datetime import timedelta
-    yesterday = datetime.now() - timedelta(days=1)
+    report_dt = datetime.strptime(report_date, "%Y-%m-%d")
+    yesterday = report_dt - timedelta(days=1)
     default_monitor_start = yesterday.strftime("%Y-%m-%d") + " 18:00"
-    default_monitor_end = today + " 18:00"
+    default_monitor_end = report_date + " 18:00"
 
     success_msg = request.session.pop("daily_report_saved", "")
 
@@ -227,7 +233,7 @@ async def daily_report_form(request: Request) -> Response:
         context={
             "page_title": "安全日报",
             "current_user": current_user,
-            "report_date": today,
+            "report_date": report_date,
             "report": report,
             "previous": previous,
             "operators": operators,
@@ -243,16 +249,19 @@ async def daily_report_form(request: Request) -> Response:
 
 
 @router.post("/daily-report/save", response_model=None)
-async def daily_report_save(request: Request) -> Response:
+async def daily_report_save(request: Request, report_date: str = Form("")) -> Response:
     current_user = require_login(request)
     if isinstance(current_user, RedirectResponse):
         return current_user
 
-    today = _today_str()
+    report_date = _resolve_report_date(report_date)
     form = await request.form()
-    existing_report = get_daily_report_by_date(today) or {}
+    existing_report = get_daily_report_by_date(report_date) or {}
 
     payload: dict[str, object] = {}
+    for field in NUMERIC_FIELDS:
+        payload[field] = str(form.get(field, "")).strip()
+
     text_fields = [
         "business_stability", "trend_comparison", "overall_assessment",
         "monitor_start", "monitor_end",
@@ -271,7 +280,7 @@ async def daily_report_save(request: Request) -> Response:
         upload = form.get(screenshot_field)
         paste_value = str(form.get(screenshot_field + "_value", "")).strip()
         if isinstance(upload, UploadFile) and upload.filename:
-            payload[screenshot_field] = _save_screenshot(upload, today, screenshot_field.removesuffix("_path"))
+            payload[screenshot_field] = _save_screenshot(upload, report_date, screenshot_field.removesuffix("_path"))
         elif paste_value:
             payload[screenshot_field] = paste_value
         else:
@@ -281,9 +290,9 @@ async def daily_report_save(request: Request) -> Response:
     for field in checkbox_fields:
         payload[field] = 1 if form.get(field) else 0
 
-    save_daily_report(today, payload, current_user["display_name"])
+    save_daily_report(report_date, payload, current_user["display_name"])
     request.session["daily_report_saved"] = "日报保存成功"
-    return RedirectResponse(url="/daily-report", status_code=302)
+    return RedirectResponse(url=f"/daily-report?date={report_date}", status_code=302)
 
 
 @router.post("/daily-report/generate-top-section", response_model=None)
@@ -292,27 +301,27 @@ async def daily_report_generate_top_section(request: Request) -> Response:
     if isinstance(current_user, RedirectResponse):
         return current_user
 
-    today = _today_str()
-    existing_report = _with_synced_summary_fields(get_daily_report_by_date(today)) or {}
-    previous_report = _with_synced_summary_fields(get_previous_report(today))
     body = await request.json()
     body_dict = body if isinstance(body, dict) else {}
+    report_date = _resolve_report_date(str(body_dict.get("report_date", "")))
+    existing_report = _with_synced_summary_fields(get_daily_report_by_date(report_date)) or {}
+    previous_report = _with_synced_summary_fields(get_previous_report(report_date))
     target_field = str(body_dict.get("target_field", "")).strip()
     report_payload = _normalize_report_payload(body_dict, existing_report)
-    report_payload["report_date"] = today
+    report_payload["report_date"] = report_date
 
     fields = (target_field,) if target_field else None
     return generate_top_section_text(report_payload, previous_report, fields=fields)
 
 
 @router.get("/daily-report/preview", response_class=HTMLResponse, response_model=None)
-async def daily_report_preview(request: Request) -> Response:
+async def daily_report_preview(request: Request, date: str | None = None) -> Response:
     current_user = require_login(request)
     if isinstance(current_user, RedirectResponse):
         return current_user
 
-    today = _today_str()
-    report = _with_synced_summary_fields(get_daily_report_by_date(today))
+    report_date = _resolve_report_date(date)
+    report = _with_synced_summary_fields(get_daily_report_by_date(report_date))
 
     return templates.TemplateResponse(
         request=request,
@@ -321,23 +330,23 @@ async def daily_report_preview(request: Request) -> Response:
             "page_title": "日报预览",
             "current_user": current_user,
             "report": report,
-            "report_date": today,
-            "preview_docx_url": "/daily-report/download?preview=1",
+            "report_date": report_date,
+            "preview_docx_url": f"/daily-report/download?date={report_date}&preview=1",
             "version_status": _pop_version_status(request),
         },
     )
 
 
 @router.get("/daily-report/download", response_model=None)
-async def daily_report_download(request: Request) -> Response:
+async def daily_report_download(request: Request, date: str | None = None) -> Response:
     current_user = require_login(request)
     if isinstance(current_user, RedirectResponse):
         return current_user
 
-    today = _today_str()
-    report = _with_synced_summary_fields(get_daily_report_by_date(today))
+    report_date = _resolve_report_date(date)
+    report = _with_synced_summary_fields(get_daily_report_by_date(report_date))
     if report is None:
-        return RedirectResponse(url="/daily-report", status_code=302)
+        return RedirectResponse(url=f"/daily-report?date={report_date}", status_code=302)
 
     operators = list_ops_personnel()
     file_path = generate_daily_report_docx(report, operators)

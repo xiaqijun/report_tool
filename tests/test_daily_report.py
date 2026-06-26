@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 import re
 from tempfile import TemporaryDirectory
@@ -5,7 +6,9 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from docx import Document
+from starlette.requests import Request
 
+from app.routers import daily_report as daily_report_router
 from app.services.docx_generator import DAILY_REPORT_TEMPLATE, generate_daily_report_docx
 
 
@@ -849,3 +852,102 @@ class DocxGenerationTests(TestCase):
                 file_path = generate_daily_report_docx(report, [])
 
             self.assertTrue(file_path.exists())
+
+
+class DailyReportDateEchoTests(TestCase):
+    def _request(self, path: str, query_string: str = "") -> Request:
+        scope = {
+            "type": "http",
+            "http_version": "1.1",
+            "method": "GET",
+            "scheme": "http",
+            "path": path,
+            "raw_path": path.encode(),
+            "query_string": query_string.encode(),
+            "headers": [],
+            "client": ("testclient", 50000),
+            "server": ("testserver", 80),
+            "session": {},
+        }
+        return Request(scope)
+
+    def _run(self, coro):
+        return asyncio.run(coro)
+
+    def test_form_uses_query_date_for_echo(self):
+        report_date = "2026-06-24"
+        report = {
+            "business_stability": "stable",
+            "monitor_start": "2026-06-23 18:00",
+            "monitor_end": "2026-06-24 18:00",
+        }
+
+        with (
+            patch("app.routers.daily_report.require_login", return_value={"display_name": "Tester"}),
+            patch("app.routers.daily_report.get_daily_report_by_date", return_value=report) as get_report,
+            patch("app.routers.daily_report.get_previous_report", return_value=None),
+            patch("app.routers.daily_report.list_ops_personnel", return_value=[]),
+        ):
+            response = self._run(
+                daily_report_router.daily_report_form(
+                    self._request("/daily-report", f"date={report_date}"),
+                    date=report_date,
+                )
+            )
+
+        html = response.template.render(response.context)
+        self.assertEqual(response.status_code, 200)
+        get_report.assert_called_once_with(report_date)
+        self.assertIn(f'name="report_date" value="{report_date}"', html)
+        self.assertIn(f'/daily-report/preview?date={report_date}', html)
+
+    def test_save_redirects_back_to_same_date(self):
+        report_date = "2026-06-24"
+        form_data = {
+            "report_date": report_date,
+            "business_stability": "stable",
+            "waf_detail_attacks": "12",
+        }
+
+        class FakeRequest:
+            def __init__(self):
+                self.session = {}
+
+            async def form(self):
+                return form_data
+
+        with (
+            patch("app.routers.daily_report.require_login", return_value={"display_name": "Tester"}),
+            patch("app.routers.daily_report.get_daily_report_by_date", return_value={}),
+            patch("app.routers.daily_report.save_daily_report") as save_report,
+        ):
+            response = self._run(
+                daily_report_router.daily_report_save(
+                    FakeRequest(),
+                    report_date=report_date,
+                )
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers["location"], f"/daily-report?date={report_date}")
+        save_report.assert_called_once()
+        self.assertEqual(save_report.call_args.args[0], report_date)
+
+    def test_preview_links_keep_selected_date(self):
+        report_date = "2026-06-24"
+
+        with (
+            patch("app.routers.daily_report.require_login", return_value={"display_name": "Tester"}),
+            patch("app.routers.daily_report.get_daily_report_by_date", return_value={"report_date": report_date}),
+        ):
+            response = self._run(
+                daily_report_router.daily_report_preview(
+                    self._request("/daily-report/preview", f"date={report_date}"),
+                    date=report_date,
+                )
+            )
+
+        html = response.template.render(response.context)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(f'/daily-report?date={report_date}', html)
+        self.assertIn(f'/daily-report/download?date={report_date}', html)

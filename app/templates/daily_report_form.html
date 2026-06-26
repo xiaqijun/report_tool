@@ -11,6 +11,7 @@
 {% endif %}
 
 <form action="/daily-report/save" method="post" enctype="multipart/form-data" class="daily-report-form">
+    <input type="hidden" name="report_date" value="{{ report_date }}">
 
     {# --- Section 1: 总体安全态势 --- #}
     <div>
@@ -440,7 +441,7 @@
     {# --- Actions --- #}
     <div class="form-actions">
         <button type="submit" class="primary-button btn btn-primary">保存日报</button>
-        <a href="/daily-report/preview" class="btn btn-outline-secondary">预览日报</a>
+        <a href="/daily-report/preview?date={{ report_date }}" class="btn btn-outline-secondary">预览日报</a>
     </div>
 
 </form>

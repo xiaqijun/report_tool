@@ -8,15 +8,15 @@
 
 {% if not report %}
 <div class="alert alert-warning" role="alert">
-    今日日报尚未填写，请先在<a href="/daily-report">填写日报</a>中创建。
+    今日日报尚未填写，请先在<a href="/daily-report?date={{ report_date }}">填写日报</a>中创建。
 </div>
 {% else %}
 
 <div class="section-header section-header-tight">
     <h1>比亚迪规划院安全运营日报-{{ report_date }}</h1>
     <div class="page-toolbar">
-        <a href="/daily-report" class="btn btn-outline-secondary">编辑日报</a>
-        <a href="/daily-report/download" class="primary-button btn btn-primary">下载 Word</a>
+        <a href="/daily-report?date={{ report_date }}" class="btn btn-outline-secondary">编辑日报</a>
+        <a href="/daily-report/download?date={{ report_date }}" class="primary-button btn btn-primary">下载 Word</a>
     </div>
 </div>
 
@@ -41,7 +41,7 @@
 {% endif %}
 
 <div class="form-actions">
-    <a href="/daily-report" class="btn btn-outline-secondary">&larr; 返回编辑</a>
+    <a href="/daily-report?date={{ report_date }}" class="btn btn-outline-secondary">&larr; 返回编辑</a>
 </div>
 
 </main>
