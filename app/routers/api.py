@@ -289,7 +289,9 @@ async def api_preview_daily_report(request: Request, report_date: str = ""):
             pdf_bytes = _pf.read()
         return Response(content=pdf_bytes, media_type="application/pdf",
                        headers={"Content-Disposition": f"inline; filename=安全运营日报-{report_date}.pdf"})
-    except Exception:
+    except Exception as _exc:
+        import traceback, logging
+        logging.error("PDF conversion failed: %s\n%s", _exc, traceback.format_exc())
         # Fallback to HTML if PDF conversion fails
         html_body = _docx_to_html(docx_path)
         from fastapi.responses import HTMLResponse
