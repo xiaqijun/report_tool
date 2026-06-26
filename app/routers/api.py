@@ -148,6 +148,8 @@ async def api_daily_report(request: Request, report_date: str = ""):
         "report_date": report_date,
         "default_waf_qps_specs": "85,000（云模式专业版45000+40个QPS扩展包）",
         "default_cfw_bandwidth_spec": "12050Mbps",
+        "default_waf_qps_peak_range": "16:55-18:00",
+        "default_cfw_peak_inbound_range": "6:04-9:04，16:44-18:00",
     }
 
 
