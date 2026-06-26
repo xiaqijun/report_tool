@@ -207,18 +207,23 @@ async def api_save_daily_report(request: Request):
     data = {k: v for k, v in form.items()}
 
     from datetime import date
-    from ..routers.daily_report import NUMERIC_FIELDS
+    from ..routers.daily_report import NUMERIC_FIELDS, SUMMARY_FIELD_MAPPINGS
 
-    # Sanitize: empty strings → 0 for numeric fields, skip UploadFile objects
+    # Remove UploadFile objects (screenshots should already be paths from paste API)
     for key in list(data.keys()):
-        val = data[key]
-        if hasattr(val, 'filename'):  # UploadFile
+        if hasattr(data[key], 'filename'):
             data[key] = ''
-        elif key in NUMERIC_FIELDS:
-            try:
-                data[key] = int(val) if str(val).strip() else 0
-            except (ValueError, TypeError):
-                data[key] = 0
+
+    # Sync summary fields from detail fields (frontend only submits detail fields)
+    for sf, df in SUMMARY_FIELD_MAPPINGS.items():
+        data[sf] = int(data.get(df, data.get(sf, 0)) or 0)
+
+    # Coerce numeric fields
+    for key in NUMERIC_FIELDS:
+        try:
+            data[key] = int(data.get(key, 0) or 0)
+        except (ValueError, TypeError):
+            data[key] = 0
 
     report_date = data.pop("report_date", "") or date.today().isoformat()
     db.save_daily_report(report_date, data, user.get("display_name") or user.get("username", "admin"))
