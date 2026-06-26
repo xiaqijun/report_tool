@@ -30,10 +30,13 @@ def _render_docx_template(template_path: Path, output_path: Path, context: dict[
         for key, value in context.items()
     }
 
+    xml_files = {"word/document.xml", "word/header1.xml", "word/header2.xml", "word/header3.xml",
+                 "word/footer1.xml", "word/footer2.xml", "word/footer3.xml"}
+
     with ZipFile(template_path, "r") as source_zip, ZipFile(output_path, "w", compression=ZIP_DEFLATED) as target_zip:
         for info in source_zip.infolist():
             data = source_zip.read(info.filename)
-            if info.filename == "word/document.xml":
+            if info.filename in xml_files or info.filename.startswith("word/header") or info.filename.startswith("word/footer"):
                 xml_text = data.decode("utf-8")
                 for placeholder, value in replacements.items():
                     xml_text = xml_text.replace(placeholder, value)
@@ -52,7 +55,10 @@ def _build_template_context(report: dict, operators: list[dict]) -> dict[str, ob
         if shared_responsibility:
             break
 
+    raw_date = str(report.get("report_date", ""))
     return {
+        "report_date": raw_date,
+        "date_display": _format_date_display(raw_date) if raw_date else "",
         "business_stability": str(report.get("business_stability", "")).strip() or "暂无",
         "summary_sentence": _compose_summary_sentence(report),
         "trend_assessment": _compose_trend_assessment(report),
