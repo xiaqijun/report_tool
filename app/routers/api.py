@@ -272,15 +272,29 @@ async def api_preview_daily_report(request: Request, report_date: str = ""):
         raise HTTPException(status_code=404, detail="未找到该日期的日报")
 
     docx_path = generate_daily_report_docx(report, db.list_ops_personnel())
-    html_body = _docx_to_html(docx_path)
 
-    from fastapi.responses import HTMLResponse
-    html = f"""<!DOCTYPE html>
+    # Convert DOCX to PDF using LibreOffice for perfect fidelity
+    import subprocess, tempfile, shutil
+    tmpdir = tempfile.mkdtemp()
+    try:
+        shutil.copy(docx_path, f"{tmpdir}/report.docx")
+        subprocess.run(
+            ['soffice', '--headless', '--convert-to', 'pdf', '--outdir', tmpdir, f"{tmpdir}/report.docx"],
+            capture_output=True, timeout=30
+        )
+        pdf_path = f"{tmpdir}/report.pdf"
+        from fastapi.responses import FileResponse
+        return FileResponse(pdf_path, media_type="application/pdf",
+                           filename=f"安全运营日报-{report_date}.pdf")
+    except Exception:
+        # Fallback to HTML if PDF conversion fails
+        html_body = _docx_to_html(docx_path)
+        from fastapi.responses import HTMLResponse
+        html = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
 body{{font-family:"Microsoft YaHei","PingFang SC",sans-serif;font-size:14px;color:#1f2937;line-height:1.8;padding:20px;max-width:860px;margin:0 auto}}
-h3{{font-size:15px}}
 </style></head><body>{html_body}</body></html>"""
-    return HTMLResponse(content=html)
+        return HTMLResponse(content=html)
 
 
 @router.get("/daily-report/download")
