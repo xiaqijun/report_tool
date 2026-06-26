@@ -232,6 +232,20 @@ async def api_save_daily_report(request: Request):
     report_date = data.pop("report_date", "") or date.today().isoformat()
     db.save_daily_report(report_date, data, user.get("display_name") or user.get("username", "admin"))
 
+    # Generate DOCX and PDF in background for preview
+    try:
+        from ..services.docx_generator import generate_daily_report_docx
+        import subprocess, os
+        report = db.get_daily_report_by_date(report_date)
+        if report:
+            docx_path = str(generate_daily_report_docx(report, db.list_ops_personnel()))
+            pdf_path = docx_path.rsplit('.', 1)[0] + '.pdf'
+            subprocess.Popen(['/usr/bin/soffice', '--headless', '--convert-to', 'pdf',
+                '--outdir', os.path.dirname(docx_path), docx_path],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
     return {"success": True}
 
 
