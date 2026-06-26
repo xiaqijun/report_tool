@@ -257,7 +257,7 @@ def _docx_to_html(docx_path: str) -> str:
 
 @router.get("/daily-report/preview")
 async def api_preview_daily_report(request: Request, report_date: str = ""):
-    """Preview daily report as HTML (from DOCX)."""
+    """Preview daily report as PDF (converted from DOCX via LibreOffice)."""
     user = require_login(request)
     if not isinstance(user, dict):
         raise HTTPException(status_code=401, detail="未登录")
@@ -273,33 +273,20 @@ async def api_preview_daily_report(request: Request, report_date: str = ""):
 
     docx_path = generate_daily_report_docx(report, db.list_ops_personnel())
 
-    # Convert DOCX to PDF using LibreOffice for perfect fidelity
+    # Convert to PDF via LibreOffice
     import subprocess, tempfile, shutil
     tmpdir = tempfile.mkdtemp()
-    try:
-        shutil.copy(docx_path, f"{tmpdir}/report.docx")
-        subprocess.run(
-            ['soffice', '--headless', '--convert-to', 'pdf', '--outdir', tmpdir, f"{tmpdir}/report.docx"],
-            capture_output=True, timeout=30
-        )
-        pdf_path = f"{tmpdir}/report.pdf"
-        from fastapi.responses import FileResponse
-        from fastapi.responses import Response
-        with open(pdf_path, 'rb') as _pf:
-            pdf_bytes = _pf.read()
-        return Response(content=pdf_bytes, media_type="application/pdf",
-                       headers={"Content-Disposition": f"inline; filename=安全运营日报-{report_date}.pdf"})
-    except Exception as _exc:
-        import traceback, logging
-        logging.error("PDF conversion failed: %s\n%s", _exc, traceback.format_exc())
-        # Fallback to HTML if PDF conversion fails
-        html_body = _docx_to_html(docx_path)
-        from fastapi.responses import HTMLResponse
-        html = f"""<!DOCTYPE html>
-<html><head><meta charset="utf-8"><style>
-body{{font-family:"Microsoft YaHei","PingFang SC",sans-serif;font-size:14px;color:#1f2937;line-height:1.8;padding:20px;max-width:860px;margin:0 auto}}
-</style></head><body>{html_body}</body></html>"""
-        return HTMLResponse(content=html)
+    shutil.copy(str(docx_path), f"{tmpdir}/report.docx")
+    subprocess.run(
+        ['soffice', '--headless', '--convert-to', 'pdf', '--outdir', tmpdir, f"{tmpdir}/report.docx"],
+        capture_output=True, timeout=30
+    )
+    pdf_path = f"{tmpdir}/report.pdf"
+    from fastapi.responses import Response
+    with open(pdf_path, 'rb') as _pf:
+        pdf_bytes = _pf.read()
+    return Response(content=pdf_bytes, media_type="application/pdf",
+                   headers={"Content-Disposition": f"inline; filename=日报-{report_date}.pdf"})
 
 
 @router.get("/daily-report/download")
