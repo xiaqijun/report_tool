@@ -204,9 +204,21 @@ async def api_save_daily_report(request: Request):
         raise HTTPException(status_code=401, detail="未登录")
 
     form = await request.form()
-    data = dict(form)
+    data = {k: v for k, v in form.items()}
 
     from datetime import date
+    from ..routers.daily_report import NUMERIC_FIELDS
+
+    # Sanitize: empty strings → 0 for numeric fields, skip UploadFile objects
+    for key in list(data.keys()):
+        val = data[key]
+        if hasattr(val, 'filename'):  # UploadFile
+            data[key] = ''
+        elif key in NUMERIC_FIELDS:
+            try:
+                data[key] = int(val) if str(val).strip() else 0
+            except (ValueError, TypeError):
+                data[key] = 0
 
     report_date = data.pop("report_date", "") or date.today().isoformat()
     db.save_daily_report(report_date, data, user.get("display_name") or user.get("username", "admin"))
