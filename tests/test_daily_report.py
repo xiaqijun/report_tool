@@ -4,6 +4,7 @@ import re
 from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
+from zipfile import ZipFile
 
 from docx import Document
 from starlette.requests import Request
@@ -252,6 +253,28 @@ class DocxGenerationTests(TestCase):
             self.assertTrue(file_path.exists())
             self.assertEqual(file_path.suffix, ".docx")
             self.assertIn("2026-05-21", file_path.name)
+
+    def test_updates_header_title_with_report_date(self):
+        report = {
+            "report_date": "2026-05-21",
+            "business_stability": "今日业务运行稳定。",
+        }
+
+        with TemporaryDirectory() as temp_dir:
+            with patch("app.services.docx_generator.EXPORT_DIR", Path(temp_dir)):
+                file_path = generate_daily_report_docx(report, [])
+
+            with ZipFile(file_path) as docx_zip:
+                core_xml = docx_zip.read("docProps/core.xml").decode("utf-8")
+                header_xml = docx_zip.read("word/header2.xml").decode("utf-8")
+
+        expected_title = "比亚迪规划院安全运营日报-2026年5月21日"
+        stale_title = "比亚迪规划院安全运营日报-2026年5月20日"
+
+        self.assertIn(f"<dc:title>{expected_title}</dc:title>", core_xml)
+        self.assertIn(expected_title, header_xml)
+        self.assertNotIn(stale_title, core_xml)
+        self.assertNotIn(stale_title, header_xml)
 
     def test_generates_docx_with_screenshot_paths(self):
         png_bytes = bytes.fromhex(

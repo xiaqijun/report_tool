@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -29,6 +30,7 @@ def _render_docx_template(template_path: Path, output_path: Path, context: dict[
         f"{{{{ {key} }}}}": escape(str(value or ""))
         for key, value in context.items()
     }
+    report_title = escape(str(context.get("report_title") or ""))
 
     xml_files = {"word/document.xml", "word/header1.xml", "word/header2.xml", "word/header3.xml",
                  "word/footer1.xml", "word/footer2.xml", "word/footer3.xml",
@@ -42,6 +44,8 @@ def _render_docx_template(template_path: Path, output_path: Path, context: dict[
                 xml_text = data.decode("utf-8", errors="replace")
                 for placeholder, value in replacements.items():
                     xml_text = xml_text.replace(placeholder, value)
+                if report_title:
+                    xml_text = _replace_report_title(xml_text, report_title)
                 data = xml_text.encode("utf-8")
             target_zip.writestr(info, data)
 
@@ -61,6 +65,7 @@ def _build_template_context(report: dict, operators: list[dict]) -> dict[str, ob
     return {
         "report_date": raw_date,
         "date_display": _format_date_display(raw_date) if raw_date else "",
+        "report_title": _build_report_title(raw_date),
         "business_stability": str(report.get("business_stability", "")).strip() or "暂无",
         "summary_sentence": _compose_summary_sentence(report),
         "trend_assessment": _compose_trend_assessment(report),
@@ -108,6 +113,20 @@ def _format_date_display(date_str: str) -> str:
         return f"{dt.year}年{dt.month}月{dt.day}日"
     except ValueError:
         return date_str
+
+
+def _build_report_title(date_str: str) -> str:
+    suffix = _format_date_display(date_str) if date_str else ""
+    return f"比亚迪规划院安全运营日报-{suffix}" if suffix else "比亚迪规划院安全运营日报"
+
+
+def _replace_report_title(xml_text: str, report_title: str) -> str:
+    xml_text = re.sub(r"<dc:title>.*?</dc:title>", f"<dc:title>{report_title}</dc:title>", xml_text, count=1)
+    return re.sub(
+        r"比亚迪规划院安全运营日报-\d{4}年\d{1,2}月\d{1,2}日",
+        report_title,
+        xml_text,
+    )
 
 
 def _format_monitor_display(value: object) -> str:
