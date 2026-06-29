@@ -6,15 +6,21 @@
 
 内部 Web 工具（报告管理工具 / "Asset Ops"），用于生成服务器资产风险报告。用户上传服务器资产电子表格，系统将其与管理员维护的数据集（负责人映射、未配额主机、延迟安装主机、责任人邮箱）进行交叉比对，生成三类分类结果列表（XLSX + CSV）。
 
-**前端：** React SPA（`app/static/react/`） + 部分 Jinja2 模板页面（安全日报等）。
-**后端：** FastAPI JSON API（`app/routers/api.py`）为主，SessionMiddleware（基于 cookie）。
-**技术栈：** FastAPI、MySQL（PyMySQL）、React、Tabler CSS、openpyxl。
+**前端：** React SPA（Semi UI + React Router + Zustand，源码在 `frontend/src/`，构建产物输出到 `app/static/react/`） + Jinja2 模板页面（安全日报 SSR，当前已注释）。
+**后端：** FastAPI（`app/main.py` → `create_app()`），SessionMiddleware（基于 cookie），`app/routers/api.py`（JSON API）+ `app/routers/daily_report.py`（日报 Jinja2 SSR，已注释）。
+**技术栈：** FastAPI、MySQL（PyMySQL）、React 18、Semi UI、Vite、openpyxl、python-docx。
 
 ## 命令
 
 ```bash
 # 运行应用（从 .env 读取 host/port/reload）
 python main.py
+
+# 前端开发（Vite dev server，代理 /api → localhost:8000）
+cd frontend && npm run dev
+
+# 前端构建（输出到 app/static/react/）
+cd frontend && npm run build
 
 # 运行所有测试
 uv run pytest
@@ -24,6 +30,7 @@ uv run pytest tests/test_inventory_generation.py
 
 # 安装依赖
 uv sync
+cd frontend && npm install
 
 # 刷新 GitNexus 索引
 npx gitnexus analyze
@@ -34,29 +41,38 @@ npx gitnexus analyze
 ## 架构
 
 ```
-浏览器 → React SPA (app/static/react/)
-  → FastAPI JSON API (app/routers/api.py, 前缀 /api)
-    → app/db.py (PyMySQL, `?` 占位符 → `%s`)
-    → app/services/inventory.py（资产报告生成）
-    → app/services/email_service.py（邮件发送）
-    → app/services/daily_report_ai.py（LLM 文本生成）
-    → app/services/docx_generator.py（日报 DOCX 导出）
-    → app/services/ip_query.py（IP 批量查询）
-    → app/services/spreadsheets.py（XLSX/CSV 读写）
+浏览器
+  → React SPA (app/static/react/) — 主要 UI，client-side routing
+  → FastAPI (app/main.py → create_app())
+    ├── /api/* → api_router (app/routers/api.py) — JSON API
+    ├── /daily-report/* → daily_report_router (app/routers/daily_report.py) — Jinja2 SSR [已注释]
+    ├── /download/{batch_code}/{result_key} — 文件下载
+    └── /* → React SPA catch-all (返回 index.html)
+         ↓
+    app/db.py (PyMySQL, `?` → `%s` 占位符转换)
+         ↓
+    app/services/
+    ├── inventory.py — 资产报告生成（在线未防护/Agent缺失/防护中断）
+    ├── email_service.py — 邮件发送（预警邮件 + 日报邮件）
+    ├── daily_report_ai.py — LLM 文案生成（安全态势三段总结）
+    ├── docx_generator.py — 日报 DOCX 模板渲染导出
+    ├── ip_query.py — IP 批量查询（IPv4/IPv6 自动区分）
+    └── spreadsheets.py — XLSX/CSV 读写
 ```
 
-**当前活跃路由（`app/main.py` → `create_app()`）：**
-- `api_router` (`/api/*`) — 所有 JSON API，供 React 前端调用
-- `/download/{batch_code}/{result_key}` — 文件下载（兼容旧版）
-- React SPA catch-all — 非 API 路径返回 `app/static/react/index.html`
+**路由注册（`app/main.py` → `create_app()`）：**
 
-**已注释的路由（Jinja2 SSR，代码保留未删除）：**
-- `auth_router` — `/login`, `/logout`, `/change-password`
-- `web_router` — `/dashboard`, `/generate`, `/history`
-- `admin_router` — `/admin/{dataset_key}`
-- `daily_report_router` — `/daily-report/*`（日报表单、预览、操作人员管理等 Jinja2 页面）
+| 路由 | 状态 | 说明 |
+|------|------|------|
+| `api_router` (`/api/*`) | 活跃 | JSON API，React 前端调用 |
+| `daily_report_router` (`/daily-report/*`) | 已注释 | Jinja2 SSR 日报页面 |
+| `auth_router` (`/login`, `/logout`, …) | 已注释 | Jinja2 认证页面 |
+| `web_router` (`/dashboard`, `/generate`, `/history`) | 已注释 | Jinja2 旧版页面 |
+| `admin_router` (`/admin/{dataset_key}`) | 已注释 | Jinja2 数据集管理 |
+| `/download/{batch_code}/{result_key}` | 活跃 | 报告文件下载 |
+| `/*` catch-all | 活跃 | React SPA fallback |
 
-**认证流程：** `app/auth.py` 从 `request.session` 读取 user_id/username/display_name。`require_login()` 返回用户字典或 401（API）/ 302 重定向。单用户模式 — 启动时自动创建管理员账号。
+**认证流程：** `app/auth.py` 从 `request.session` 读取 user_id/username/display_name。`require_login()` 返回用户字典或 401（API）/ 302 重定向。单用户模式 — 启动时自动在 `users` 表创建管理员账号。
 
 ## 数据库
 
@@ -133,27 +149,19 @@ npx gitnexus analyze
 
 仓库根目录的 `.env` 文件（gitignored，参见 `.env.example`）。`app/config.py` 通过 `python-dotenv` 读取。
 
-**数据库：** `DATABASE_HOST/PORT/USER/PASSWORD/NAME/CHARSET`
-**应用：** `APP_HOST/PORT/RELOAD`、`SECRET_KEY`、`DEFAULT_ADMIN_USERNAME/PASSWORD`
-**LLM：** `LLM_API_BASE_URL`、`LLM_API_KEY`、`LLM_MODEL`、`LLM_TIMEOUT_SECONDS`
-**邮件：** `SMTP_HOST/PORT/USER/PASSWORD/FROM/USE_TLS`
+**必填：** `DATABASE_HOST/PORT/USER/PASSWORD/NAME/CHARSET`、`SECRET_KEY`
+**应用：** `APP_HOST/PORT/RELOAD`、`DEFAULT_ADMIN_USERNAME/PASSWORD`
+**LLM（可选，用于日报 AI 文案）：** `LLM_API_BASE_URL`、`LLM_API_KEY`、`LLM_MODEL`、`LLM_TIMEOUT_SECONDS`
+**邮件（可选，用于发送预警/日报邮件）：** `SMTP_HOST/PORT/USER/PASSWORD/FROM/USE_TLS`
 
 LLM 和邮件配置也可通过 `/api/llm-settings` 和 `/api/email/settings` 在数据库 `app_settings` 表中动态覆盖。
 
-## 模板和静态文件
-
-- React SPA 构建产物：`app/static/react/`（index.html + assets/）
-- Jinja2 模板：`app/templates/`（base.html → app_shell.html → 各页面）
-- 自定义 CSS：`app/static/app.css`
-- 供应商库：`app/static/vendor/tabler/`、`tabler-icons/`
-- 数据集导入模板：`app/static/import-templates/`
-- 日报 DOCX 模板：`app/static/report-templates/daily-report-template.docx`
-- 邮件模板内嵌图片：`app/static/email-images/`
+> **注意：** `frontend/` 目录（React 源码）在 `.gitignore` 中。新克隆后需 `cd frontend && npm install` 才能构建前端。
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **report_tool** (1327 symbols, 4067 relationships, 116 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **report_tool** (1311 symbols, 4036 relationships, 115 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

@@ -16,7 +16,10 @@
       "mcp__aipy__aipy_run",
       "mcp__aipy__aipy_python",
       "mcp__aipy__list_tools",
-      "mcp__aipy__call_tool"
+      "mcp__aipy__call_tool",
+      "Bash(stat -c \"%n %s\" e:/github/report_tool/app/templates/*.html)",
+      "Read(//e/github/report_tool/**)",
+      "Bash(echo \"EXIT: $?\")"
     ]
   }
 }
