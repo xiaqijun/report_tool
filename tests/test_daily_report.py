@@ -396,6 +396,17 @@ class DocxGenerationTests(TestCase):
         self.assertIn("入方向95带宽值14.71Gbps", paragraph_text)
         self.assertNotIn("GbpsGbps", paragraph_text)
 
+    def test_waf_qps_caption_has_line_break_before_embedded_picture(self):
+        doc = Document(DAILY_REPORT_TEMPLATE)
+        paragraph = doc.tables[0].rows[4].cells[0].paragraphs[5]
+
+        drawing_count = len(paragraph._element.xpath('.//*[local-name()="drawing"]'))
+        break_count = len(paragraph._element.xpath('.//*[local-name()="br"]'))
+
+        self.assertEqual(paragraph.text.lstrip("\n"), "图2：\u00a0WAF监测QPS趋势情况（单位：qps）")
+        self.assertGreater(drawing_count, 0)
+        self.assertGreater(break_count, 0)
+
     def test_preserves_template_paragraph_formatting(self):
         report = {
             "report_date": "2026-05-21",

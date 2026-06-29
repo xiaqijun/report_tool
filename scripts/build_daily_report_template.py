@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from docx import Document
+from docx.oxml import OxmlElement
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -17,6 +18,25 @@ def set_paragraph_runs(paragraph, texts: list[str], target_font_name: str | None
         run.text = texts[index] if index < len(texts) else ""
         if target_font_name and run.text:
             run.font.name = target_font_name
+
+
+def insert_line_break_before_drawing(paragraph) -> None:
+    runs = list(paragraph.runs)
+    if len(runs) < 2:
+        return
+
+    for run in runs:
+        if not run._element.xpath('.//*[local-name()="drawing"]'):
+            continue
+        previous = run._element.getprevious()
+        if previous is not None and previous.xpath('.//*[local-name()="br"]'):
+            return
+
+        break_run = OxmlElement("w:r")
+        line_break = OxmlElement("w:br")
+        break_run.append(line_break)
+        run._element.addprevious(break_run)
+        return
 
 
 def find_source_docx() -> Path:
@@ -42,6 +62,7 @@ def main() -> None:
     set_paragraph_runs(table.rows[3].cells[0].paragraphs[0], ["{{ monitor_heading }}", "", "", "", "", ""])
 
     monitoring_cell = table.rows[4].cells[0]
+    insert_line_break_before_drawing(monitoring_cell.paragraphs[5])
     set_paragraph_runs(monitoring_cell.paragraphs[0], ["1.", "\u00a0 ", "{{ monitor_subheading }}"])
     set_paragraph_runs(monitoring_cell.paragraphs[1], ["{{ waf_detail }}", "", "", "", ""], target_font_name="微软雅黑")
     set_paragraph_runs(monitoring_cell.paragraphs[4], ["\u00a0", "{{ waf_qps_detail }}", "", "", "", "", "", "", "", "", "", ""], target_font_name="微软雅黑")
