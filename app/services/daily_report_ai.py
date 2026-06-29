@@ -10,13 +10,13 @@ TOP_SECTION_FIELDS = ("business_stability", "trend_comparison", "overall_assessm
 
 FIELD_INSTRUCTIONS = {
     "business_stability": "业务运行情况：只写1句话，优先贴近历史成稿句式‘今日业务运行稳定，……，整体安全状态稳定。’；先写运行状态，再写是否存在主机入侵或核心异常，结尾落到‘整体安全状态稳定/平稳’，不要写趋势判断，不要出现‘总体来看’。",
-    "trend_comparison": "趋势对比说明：只写1句话，必须使用‘与昨日相比，’起句；只比较WAF、CFW、HSS、SecMaster等核心指标的上升、下降或持平，可在句末补‘整体波动处于预期范围内’，无昨日数据时写‘与昨日相比，因缺少基线数据，暂无法开展趋势对比。’。",
+    "trend_comparison": "趋势对比说明：只写1句话，必须使用‘与昨日相比，’起句；只比较WAF、CFW、HSS、SecMaster等核心指标的上升、下降或持平，避免逐项罗列具体增减值，优先归纳为‘有所上升/有所下降/基本持平/有升有降’；可在句末补‘整体波动处于预期范围内’，无昨日数据时写‘与昨日相比，因缺少基线数据，暂无法开展趋势对比。’。",
     "overall_assessment": "总体评估：只写1句话，必须使用‘总体来看，’起句；优先贴近历史成稿句式‘总体来看，整体安全态势保持平稳可控。’；只给结论，不重复罗列产品数据，不写建议项。",
 }
 
 STYLE_EXAMPLES = {
     "business_stability": "今日业务运行稳定，无主机入侵事件，整体安全状态稳定。",
-    "trend_comparison": "与昨日相比，WAF、CFW相关攻击数量有所上升，HSS、SecMaster告警数量有所下降，整体波动处于预期范围内。",
+    "trend_comparison": "与昨日相比，WAF、CFW相关攻击数量有升有降，HSS、SecMaster告警数量整体有所下降，整体波动处于预期范围内。",
     "overall_assessment": "总体来看，整体安全态势保持平稳可控。",
 }
 
@@ -77,6 +77,7 @@ def _call_llm(
                     "顶部三段要写成可直接贴入正式日报模板的成稿，不要写成模型说明或数据摘要。"
                     "其中业务运行情况优先贴近‘今日业务运行稳定，……，整体安全状态稳定。’；"
                     "趋势对比说明优先贴近‘与昨日相比，……，整体波动处于预期范围内。’；"
+                    "趋势对比说明不要逐项堆砌具体增减值，优先按攻击和告警两类做归纳表述；"
                     "总体评估优先贴近‘总体来看，整体安全态势保持平稳可控。’。"
                     f"请仅输出 JSON，对象中必须只包含这几个字段：{', '.join(fields)}。"
                     "不得输出字段说明、标题、前后缀。"
@@ -197,28 +198,51 @@ def _build_trend_text(report: dict[str, object], previous: dict[str, object] | N
     if not previous:
         return "与昨日相比，因缺少基线数据，暂无法开展趋势对比。"
 
-    comparisons = [
-        _comparison_phrase("WAF攻击", report, previous, "waf_attacks"),
-        _comparison_phrase("CFW攻击", report, previous, "cfw_attacks"),
-        _comparison_phrase("HSS告警", report, previous, "hss_alerts"),
-        _comparison_phrase("SecMaster告警", report, previous, "secmaster_alerts"),
-    ]
-    meaningful = [item for item in comparisons if item]
-    if not meaningful:
+    attack_phrase = _build_group_trend_phrase(
+        report,
+        previous,
+        metrics=(("WAF", "waf_attacks"), ("CFW", "cfw_attacks")),
+        suffix="相关攻击数量",
+    )
+    alert_phrase = _build_group_trend_phrase(
+        report,
+        previous,
+        metrics=(("HSS", "hss_alerts"), ("SecMaster", "secmaster_alerts")),
+        suffix="告警数量",
+    )
+    if attack_phrase.endswith("基本持平") and alert_phrase.endswith("基本持平"):
         return "与昨日相比，各项核心攻击与告警指标整体持平，暂无明显波动。"
-    suffix = "，整体波动处于预期范围内。"
-    return "与昨日相比，" + "；".join(meaningful) + suffix
+    return f"与昨日相比，{attack_phrase}，{alert_phrase}，整体波动处于预期范围内。"
 
 
-def _comparison_phrase(label: str, report: dict[str, object], previous: dict[str, object], field: str) -> str:
+def _build_group_trend_phrase(
+    report: dict[str, object],
+    previous: dict[str, object],
+    metrics: tuple[tuple[str, str], ...],
+    suffix: str,
+) -> str:
+    directions = {_comparison_direction(report, previous, field) for _, field in metrics}
+    labels = "、".join(label for label, _ in metrics)
+    if directions == {"flat"}:
+        return f"{labels}{suffix}基本持平"
+    if "up" in directions and "down" in directions:
+        return f"{labels}{suffix}有升有降"
+    if "up" in directions:
+        qualifier = "整体有所上升" if "flat" in directions else "有所上升"
+        return f"{labels}{suffix}{qualifier}"
+    qualifier = "整体有所下降" if "flat" in directions else "有所下降"
+    return f"{labels}{suffix}{qualifier}"
+
+
+def _comparison_direction(report: dict[str, object], previous: dict[str, object], field: str) -> str:
     current = int(report.get(field, 0) or 0)
     last = int(previous.get(field, 0) or 0)
     delta = current - last
     if delta > 0:
-        return f"{label}上升{delta}次"
+        return "up"
     if delta < 0:
-        return f"{label}下降{abs(delta)}次"
-    return f"{label}持平"
+        return "down"
+    return "flat"
 
 
 def _monitor_window(report: dict[str, object]) -> str:
