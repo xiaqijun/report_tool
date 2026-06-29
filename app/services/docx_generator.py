@@ -75,6 +75,11 @@ def _build_template_context(report: dict, operators: list[dict]) -> dict[str, ob
         "waf_qps_detail": _compose_waf_qps_detail(report),
         "cfw_detail": _compose_cfw_detail(report),
         "cfw_bandwidth_detail": _compose_cfw_bandwidth_detail(report),
+        "cfw_bandwidth_spec": str(report.get("cfw_bandwidth_spec", "")).strip(),
+        "cfw_peak_inbound_range": str(report.get("cfw_peak_inbound_range", "")).strip(),
+        "cfw_inbound_peak_display": _strip_gbps_unit(report.get("cfw_inbound_peak", "")),
+        "cfw_inbound_95th_display": _strip_gbps_unit(report.get("cfw_inbound_95th", "")),
+        "cfw_exceeded_text": _compose_cfw_exceeded_text(report),
         "hss_detail": _compose_hss_detail(report),
         "ddos_detail": _compose_ddos_detail(report),
         "secmaster_detail": _compose_secmaster_detail(report),
@@ -121,12 +126,30 @@ def _build_report_title(date_str: str) -> str:
 
 
 def _replace_report_title(xml_text: str, report_title: str) -> str:
-    xml_text = re.sub(r"<dc:title>.*?</dc:title>", f"<dc:title>{report_title}</dc:title>", xml_text, count=1)
-    return re.sub(
-        r"比亚迪规划院安全运营日报-\d{4}年\d{1,2}月\d{1,2}日",
-        report_title,
-        xml_text,
+    xml_text = re.sub(r"<dc:title>.*?</dc:title>", f"<dc:title>{report_title}</dc:title>", xml_text, count=1, flags=re.S)
+    title_block_pattern = re.compile(
+        r'(<w:sdtPr>.*?<w:alias w:val="标题".*?</w:sdtPr><w:sdtContent>.*?<w:p\b[^>]*>)(.*?)(</w:p>.*?</w:sdtContent>)',
+        re.S,
     )
+
+    def replace_title_runs(match: re.Match[str]) -> str:
+        paragraph_xml = match.group(2)
+        text_nodes = list(re.finditer(r"<w:t([^>]*)>.*?</w:t>", paragraph_xml, flags=re.S))
+        if not text_nodes:
+            return match.group(0)
+
+        parts = [report_title, "", ""]
+        updated = paragraph_xml
+        for index, text_match in enumerate(reversed(text_nodes)):
+            real_index = len(text_nodes) - 1 - index
+            attrs = text_match.group(1) or ""
+            value = parts[real_index] if real_index < len(parts) else ""
+            replacement = f"<w:t{attrs}>{escape(value)}</w:t>"
+            updated = updated[:text_match.start()] + replacement + updated[text_match.end():]
+        return f"{match.group(1)}{updated}{match.group(3)}"
+
+    xml_text = title_block_pattern.sub(replace_title_runs, xml_text, count=1)
+    return xml_text
 
 
 def _format_monitor_display(value: object) -> str:
@@ -240,14 +263,14 @@ def _compose_cfw_detail(report: dict) -> str:
 
 
 def _compose_cfw_bandwidth_detail(report: dict) -> str:
-    exceeded = ""
-    if int(report.get("cfw_exceeded_spec", 0)):
-        exceeded = "入方向流量峰值、入方向95带宽已超出规格。可能出现限流、随机丢包、自动Bypass等现象，影响业务。"
+    exceeded = _compose_cfw_exceeded_text(report)
+    inbound_peak = _strip_gbps_unit(report.get("cfw_inbound_peak", ""))
+    inbound_95 = _strip_gbps_unit(report.get("cfw_inbound_95th", ""))
     return (
         f"当前CFW产品互联网边界防护带宽为{report.get('cfw_bandwidth_spec', '')}。"
-        f"监测到带宽峰值时间段为{report.get('cfw_peak_inbound_range', '')}，入方向流量峰值{report.get('cfw_inbound_peak', '')}，"
-        f"入方向95带宽值{report.get('cfw_inbound_95th', '')}，{exceeded}"
-    ).strip("，")
+        f"监测到带宽峰值时间段为{report.get('cfw_peak_inbound_range', '')}，入方向流量峰值{inbound_peak}Gbps，"
+        f"入方向95带宽值{inbound_95}Gbps。{exceeded}"
+    ).strip()
 
 
 def _compose_hss_detail(report: dict) -> str:
@@ -478,18 +501,32 @@ def _add_cfw_detail(doc: Document, report: dict) -> None:
     _add_optional_screenshot(doc, report.get("cfw_screenshot_path", ""))
     bw_spec = str(report.get("cfw_bandwidth_spec", ""))
     peak_range = str(report.get("cfw_peak_inbound_range", ""))
-    inbound_peak = str(report.get("cfw_inbound_peak", ""))
-    inbound_95 = str(report.get("cfw_inbound_95th", ""))
+    inbound_peak = _strip_gbps_unit(report.get("cfw_inbound_peak", ""))
+    inbound_95 = _strip_gbps_unit(report.get("cfw_inbound_95th", ""))
     if bw_spec or peak_range:
-        exceeded = ""
-        if int(report.get("cfw_exceeded_spec", 0)):
-            exceeded = "入方向流量峰值、入方向95带宽已超出规格。可能出现限流、随机丢包、自动Bypass等现象，影响业务。"
+        exceeded = _compose_cfw_exceeded_text(report)
         _add_para(doc,
             f"当前CFW产品互联网边界防护带宽为{bw_spec}。"
             f"监测到带宽峰值时间段为{peak_range}，"
-            f"入方向流量峰值{inbound_peak}，入方向95带宽值{inbound_95}。" + exceeded
+            f"入方向流量峰值{inbound_peak}Gbps，入方向95带宽值{inbound_95}Gbps。{exceeded}"
         )
         _add_optional_screenshot(doc, report.get("cfw_bandwidth_screenshot_path", ""))
+
+
+def _compose_cfw_exceeded_text(report: dict) -> str:
+    if int(report.get("cfw_exceeded_spec", 0)):
+        return "入方向流量峰值、入方向95带宽已超出规格。可能出现限流、随机丢包、自动Bypass等现象，影响业务。"
+    return ""
+
+
+def _strip_gbps_unit(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    match = re.fullmatch(r"(\d+(?:\.\d+)?)\s*[Gg][Bb]ps", text)
+    if match:
+        return match.group(1)
+    return text
 
 
 def _add_hss_detail(doc: Document, report: dict) -> None:

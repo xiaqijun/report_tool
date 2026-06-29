@@ -363,7 +363,9 @@ class DocxGenerationTests(TestCase):
             self.assertIn("WAF遭受攻击1000次", table.rows[2].cells[0].paragraphs[1].text)
             self.assertIn("趋势平稳。总体态势良好。", table.rows[2].cells[0].paragraphs[2].text)
             self.assertIn("监控时间：2026年5月20日 18:00~2026年5月21日 18:00", table.rows[3].cells[0].paragraphs[0].text)
-            self.assertIn("未闭环事件12次", table.rows[4].cells[0].paragraphs[13].text)
+            self.assertIn("入方向流量峰值15.90Gbps", table.rows[4].cells[0].paragraphs[9].text)
+            self.assertIn("入方向95带宽值14.71Gbps", table.rows[4].cells[0].paragraphs[9].text)
+            self.assertIn("未闭环事件12次", table.rows[4].cells[0].paragraphs[12].text)
             self.assertEqual(table.rows[6].cells[0].paragraphs[0].text, "今日已完成重点巡检。")
             self.assertEqual(table.rows[8].cells[0].paragraphs[0].text, "攻击路径分析暂无异常。")
 
@@ -372,6 +374,27 @@ class DocxGenerationTests(TestCase):
             self.assertEqual(operator_table.rows[1].cells[1].text, "张三")
             self.assertEqual(operator_table.rows[1].cells[4].text, "负责安全监控。")
             self.assertEqual(operator_table.rows[2].cells[1].text, "")
+
+    def test_cfw_bandwidth_detail_adds_fixed_gbps_unit_from_template(self):
+        report = {
+            "report_date": "2026-05-21",
+            "business_stability": "今日业务运行稳定。",
+            "cfw_bandwidth_spec": "12050Mbps",
+            "cfw_peak_inbound_range": "16:44-18:00",
+            "cfw_inbound_peak": "15.90",
+            "cfw_inbound_95th": "14.71Gbps",
+        }
+
+        with TemporaryDirectory() as temp_dir:
+            with patch("app.services.docx_generator.EXPORT_DIR", Path(temp_dir)):
+                file_path = generate_daily_report_docx(report, [])
+
+            doc = Document(file_path)
+            paragraph_text = doc.tables[0].rows[4].cells[0].paragraphs[9].text
+
+        self.assertIn("入方向流量峰值15.90Gbps", paragraph_text)
+        self.assertIn("入方向95带宽值14.71Gbps", paragraph_text)
+        self.assertNotIn("GbpsGbps", paragraph_text)
 
     def test_preserves_template_paragraph_formatting(self):
         report = {
