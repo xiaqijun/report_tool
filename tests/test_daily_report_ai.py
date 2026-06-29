@@ -76,7 +76,29 @@ class DailyReportAiTests(TestCase):
 
         self.assertEqual(
             text,
-            "与昨日相比，WAF、CFW相关攻击数量有升有降，HSS、SecMaster告警数量整体有所下降，整体波动处于预期范围内。",
+            "与昨日相比，CFW攻击数量、HSS告警数量均有所下降，WAF攻击数量有所上升，SecMaster告警数量基本持平，整体波动处于预期范围内。",
+        )
+
+    def test_trend_fallback_merges_metrics_with_similar_decline(self):
+        report = {
+            **self.report,
+            "waf_attacks": 82,
+            "cfw_attacks": 25,
+            "hss_alerts": 8,
+            "secmaster_alerts": 7,
+        }
+        previous = {
+            "waf_attacks": 100,
+            "cfw_attacks": 25,
+            "hss_alerts": 10,
+            "secmaster_alerts": 6,
+        }
+
+        text = _build_trend_text(report, previous)
+
+        self.assertEqual(
+            text,
+            "与昨日相比，WAF攻击数量、HSS告警数量均有所下降，SecMaster告警数量有所上升，CFW攻击数量基本持平，整体波动处于预期范围内。",
         )
 
     def test_trend_fallback_uses_stable_phrase_when_all_metrics_flat(self):
