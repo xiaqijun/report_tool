@@ -161,7 +161,7 @@ LLM 和邮件配置也可通过 `/api/llm-settings` 和 `/api/email/settings` �
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **report_tool** (1311 symbols, 4036 relationships, 115 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **report_tool** (1418 symbols, 4671 relationships, 125 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
