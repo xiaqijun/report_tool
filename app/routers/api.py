@@ -270,7 +270,7 @@ def _docx_to_html(docx_path: str) -> str:
 
 
 @router.get("/daily-report/preview")
-async def api_preview_daily_report(request: Request, report_date: str = ""):
+async def api_preview_daily_report(request: Request, report_date: str = "", refresh_cache: bool = False):
     """Preview daily report as PDF (converted from DOCX via LibreOffice)."""
     user = require_login(request)
     if not isinstance(user, dict):
@@ -291,17 +291,21 @@ async def api_preview_daily_report(request: Request, report_date: str = ""):
     docx_path_str = _os.path.join(export_dir, f"{report_date}.docx")
     pdf_path_str = _os.path.join(export_dir, f"{report_date}.pdf")
 
-    # Generate DOCX if not cached
-    if not _os.path.exists(docx_path_str):
+    # Generate DOCX if not cached, or when the preview explicitly requests a cache refresh.
+    if refresh_cache or not _os.path.exists(docx_path_str):
         docx_path_str = str(generate_daily_report_docx(report, db.list_ops_personnel()))
 
-    # Convert to PDF if not cached
-    if not _os.path.exists(pdf_path_str):
-        subprocess.run(
+    # Convert to PDF if not cached, or rebuild it from the refreshed DOCX.
+    if refresh_cache or not _os.path.exists(pdf_path_str):
+        if refresh_cache and _os.path.exists(pdf_path_str):
+            _os.remove(pdf_path_str)
+        result = subprocess.run(
             ['/usr/bin/soffice', '--headless', '--convert-to', 'pdf',
              '--outdir', export_dir, docx_path_str],
             capture_output=True, timeout=30
         )
+        if result.returncode != 0 or not _os.path.exists(pdf_path_str):
+            raise HTTPException(status_code=500, detail="PDF 预览缓存更新失败")
 
     from fastapi.responses import Response
     with open(pdf_path_str, 'rb') as _pf:
