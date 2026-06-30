@@ -949,7 +949,7 @@ class DocxGenerationTests(TestCase):
             tr_height = row._tr.trPr.trHeight
             self.assertIsNotNone(tr_height)
             self.assertIn('w:val="442"', tr_height.xml)
-            self.assertEqual(str(tr_height.hRule), "EXACTLY (2)")
+            self.assertEqual(str(tr_height.hRule), "AT_LEAST (1)")
 
 
 class DailyReportDateEchoTests(TestCase):
