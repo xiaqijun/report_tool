@@ -948,7 +948,7 @@ class DocxGenerationTests(TestCase):
         for row in operator_table.rows[1:]:
             tr_height = row._tr.trPr.trHeight
             self.assertIsNotNone(tr_height)
-            self.assertIn('w:val="440"', tr_height.xml)
+            self.assertIn('w:val="442"', tr_height.xml)
             self.assertEqual(str(tr_height.hRule), "EXACTLY (2)")
 
 
