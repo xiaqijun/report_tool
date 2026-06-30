@@ -276,6 +276,22 @@ class DocxGenerationTests(TestCase):
         self.assertNotIn(stale_title, core_xml)
         self.assertNotIn(stale_title, header_xml)
 
+    def test_footer_uses_report_date_instead_of_generation_time(self):
+        report = {
+            "report_date": "2026-05-21",
+            "business_stability": "今日业务运行稳定。",
+        }
+
+        with TemporaryDirectory() as temp_dir:
+            with patch("app.services.docx_generator.EXPORT_DIR", Path(temp_dir)):
+                file_path = generate_daily_report_docx(report, [])
+
+            with ZipFile(file_path) as docx_zip:
+                footer_xml = docx_zip.read("word/footer2.xml").decode("utf-8")
+
+        self.assertIn("2026-05-21", footer_xml)
+        self.assertNotIn(" TIME ", footer_xml)
+
     def test_generates_docx_with_screenshot_paths(self):
         png_bytes = bytes.fromhex(
             "89504E470D0A1A0A0000000D49484452000000010000000108060000001F15C489"
@@ -911,6 +927,29 @@ class DocxGenerationTests(TestCase):
                 file_path = generate_daily_report_docx(report, [])
 
             self.assertTrue(file_path.exists())
+
+    def test_operator_rows_use_uniform_exact_height(self):
+        report = {
+            "report_date": "2026-05-21",
+            "business_stability": "今日业务运行稳定。",
+        }
+        operators = [
+            {"name": "张三", "phone": "13800138000", "role": "安全运营人员", "responsibility": "负责安全监控。"},
+            {"name": "李四", "phone": "13900139000", "role": "项目PM", "responsibility": "负责安全监控。"},
+        ]
+
+        with TemporaryDirectory() as temp_dir:
+            with patch("app.services.docx_generator.EXPORT_DIR", Path(temp_dir)):
+                file_path = generate_daily_report_docx(report, operators)
+
+            doc = Document(file_path)
+            operator_table = doc.tables[0].rows[10].cells[0].tables[0]
+
+        for row in operator_table.rows[1:]:
+            tr_height = row._tr.trPr.trHeight
+            self.assertIsNotNone(tr_height)
+            self.assertIn('w:val="380"', tr_height.xml)
+            self.assertEqual(str(tr_height.hRule), "EXACTLY (2)")
 
 
 class DailyReportDateEchoTests(TestCase):
