@@ -447,8 +447,7 @@ async def api_update_operator(request: Request, operator_id: int):
         raise HTTPException(status_code=401, detail="未登录")
 
     data = await request.json()
-    data["id"] = operator_id
-    db.save_ops_personnel(data)
+    db.save_ops_personnel(data, operator_id)
     return {"success": True}
 
 

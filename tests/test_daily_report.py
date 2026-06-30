@@ -9,6 +9,7 @@ from zipfile import ZipFile
 from docx import Document
 from starlette.requests import Request
 
+from app.routers import api as api_router
 from app.routers import daily_report as daily_report_router
 from app.services.docx_generator import DAILY_REPORT_TEMPLATE, generate_daily_report_docx
 
@@ -1049,3 +1050,33 @@ class DailyReportDateEchoTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(f'/daily-report?date={report_date}', html)
         self.assertIn(f'/daily-report/download?date={report_date}', html)
+
+
+class OperatorApiTests(TestCase):
+    class _JsonRequest:
+        def __init__(self, payload):
+            self._payload = payload
+
+        async def json(self):
+            return self._payload
+
+    def _run(self, coro):
+        return asyncio.run(coro)
+
+    def test_update_operator_passes_record_id_to_save(self):
+        payload = {
+            "name": "张三",
+            "phone": "13800138000",
+            "role": "安全运营人员",
+            "responsibility": "负责安全监控。",
+            "sort_order": 1,
+        }
+
+        with (
+            patch("app.routers.api.require_login", return_value={"display_name": "Tester"}),
+            patch("app.routers.api.db.save_ops_personnel") as save_ops_personnel,
+        ):
+            response = self._run(api_router.api_update_operator(self._JsonRequest(payload), 7))
+
+        self.assertEqual(response, {"success": True})
+        save_ops_personnel.assert_called_once_with(payload, 7)
