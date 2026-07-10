@@ -193,7 +193,7 @@ class InventoryGenerationTests(TestCase):
             ):
                 inventory.generate_from_asset_file(export_dir / "asset.xlsx", "系统管理员")
 
-            xlsx_path = next(export_dir.glob("*/*.xlsx"))
+            xlsx_path = next(export_dir.glob("*/比亚迪Agent在线未添加防护配置主机列表-*.xlsx"))
             self.assertRegex(xlsx_path.name, r"^比亚迪Agent在线未添加防护配置主机列表-\d{4}-\d{2}-\d{2}\.xlsx$")
 
             workbook = load_workbook(xlsx_path)
