@@ -45,6 +45,7 @@ export default function MainLayout() {
         { itemKey: '/admin/owner-emails', text: '责任人邮箱', icon: <IconUserGroup /> },
         { itemKey: '/admin/unquota-hosts', text: '未配额主机', icon: <IconUserGroup /> },
         { itemKey: '/admin/deferred-install-hosts', text: '暂不安装主机', icon: <IconUserGroup /> },
+        { itemKey: '/admin/unprotected-container-nodes', text: '未防护容器节点', icon: <IconUserGroup /> },
         { itemKey: '/history', text: '历史记录', icon: <IconHistory /> },
       ],
     },

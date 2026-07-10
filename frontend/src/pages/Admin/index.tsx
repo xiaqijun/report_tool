@@ -14,7 +14,9 @@ interface DataItem {
 interface DatasetConfig {
   title: string
   columns: [string, string][]
-  template_filename: string
+  template_filename?: string
+  readOnly?: boolean
+  importHint?: string
 }
 
 const datasetConfigs: Record<string, DatasetConfig> = {
@@ -37,6 +39,24 @@ const datasetConfigs: Record<string, DatasetConfig> = {
     title: '暂不安装主机',
     columns: [['server_id', '服务器ID'], ['ip_address', 'IP地址'], ['server_name', '服务器名称'], ['note', '备注']],
     template_filename: '暂不安装主机导入模板.xlsx',
+  },
+  'unprotected-container-nodes': {
+    title: '未防护容器节点',
+    columns: [
+      ['server_name', '服务器名称'],
+      ['server_id', '服务器ID'],
+      ['ip_address', 'IP地址'],
+      ['cluster_name', '集群名称'],
+      ['agent_status', 'Agent状态'],
+      ['protection_status', '防护状态'],
+      ['server_status', '服务器状态'],
+      ['enterprise_project', '企业项目'],
+      ['provider', '服务商'],
+      ['protection_version', '防护版本'],
+      ['updated_at', '导入时间'],
+    ],
+    readOnly: true,
+    importHint: '导入节点列表后，系统仅保留“防护状态=未防护”且“存在容器进程=是”的节点。',
   },
 }
 
@@ -114,10 +134,10 @@ export default function AdminPage() {
       const rawFile = file?.fileInstance || file?.originFileObj || file
       const formData = new FormData()
       formData.append('import_file', rawFile)
-      await api.post(`/api/admin/${datasetKey}/import`, formData, {
+      const response = await api.post(`/api/admin/${datasetKey}/import`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
-      Toast.success('导入成功')
+      Toast.success(`导入成功，共 ${response.data.count ?? 0} 条`)
       fetchData()
     } catch {
       Toast.error('导入失败')
@@ -128,13 +148,16 @@ export default function AdminPage() {
     return <div>未知数据集</div>
   }
 
-  const columns = [
+  const columns: any[] = [
     ...config.columns.map(([key, label]) => ({
       title: label,
       dataIndex: key,
       key,
     })),
-    {
+  ]
+
+  if (!config.readOnly) {
+    columns.push({
       title: '操作',
       key: 'action',
       width: 120,
@@ -150,11 +173,15 @@ export default function AdminPage() {
           </Popconfirm>
         </div>
       ),
-    },
-  ]
+    })
+  }
 
   return (
     <div>
+      <div style={{ marginBottom: 16 }}>
+        <Title heading={4} style={{ margin: 0 }}>{config.title}</Title>
+        {config.importHint && <div style={{ marginTop: 8, color: 'var(--semi-color-text-2)' }}>{config.importHint}</div>}
+      </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <Input
@@ -174,12 +201,16 @@ export default function AdminPage() {
           >
             <Button icon={<IconUpload />}>导入数据</Button>
           </Upload>
-          <Button icon={<IconDownload />} onClick={() => window.open(`/static/import-templates/${config.template_filename}`)}>
-            下载模板
-          </Button>
-          <Button type="primary" icon={<IconPlus />} onClick={handleAdd}>
-            新增
-          </Button>
+          {config.template_filename && (
+            <Button icon={<IconDownload />} onClick={() => window.open(`/static/import-templates/${config.template_filename}`)}>
+              下载模板
+            </Button>
+          )}
+          {!config.readOnly && (
+            <Button type="primary" icon={<IconPlus />} onClick={handleAdd}>
+              新增
+            </Button>
+          )}
         </div>
       </div>
 
@@ -188,6 +219,7 @@ export default function AdminPage() {
         dataSource={data}
         rowKey="id"
         loading={loading}
+        scroll={{ x: 'max-content' }}
         pagination={{
           ...pagination,
           pageSize: 20,
@@ -196,22 +228,24 @@ export default function AdminPage() {
         }}
       />
 
-      <Modal
-        title={editingRecord ? '编辑记录' : '新增记录'}
-        visible={modalVisible}
-        onOk={() => formApi?.submitForm()}
-        onCancel={() => setModalVisible(false)}
-      >
-        <Form
-          initValues={editingRecord || {}}
-          onSubmit={handleSave}
-          getFormApi={(api) => setFormApi(api)}
+      {!config.readOnly && (
+        <Modal
+          title={editingRecord ? '编辑记录' : '新增记录'}
+          visible={modalVisible}
+          onOk={() => formApi?.submitForm()}
+          onCancel={() => setModalVisible(false)}
         >
-          {config.columns.map(([key, label]) => (
-            <Form.Input key={key} field={key} label={label} />
-          ))}
-        </Form>
-      </Modal>
+          <Form
+            initValues={editingRecord || {}}
+            onSubmit={handleSave}
+            getFormApi={(api) => setFormApi(api)}
+          >
+            {config.columns.map(([key, label]) => (
+              <Form.Input key={key} field={key} label={label} />
+            ))}
+          </Form>
+        </Modal>
+      )}
     </div>
   )
 }

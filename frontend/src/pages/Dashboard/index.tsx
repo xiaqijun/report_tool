@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Card, Row, Col, Button, Toast, Typography, Upload } from '@douyinfe/semi-ui'
 import { IconUpload, IconDownload, IconAlertCircle } from '@douyinfe/semi-icons'
 import api from '../../api'
@@ -20,6 +21,7 @@ interface DashboardData {
 }
 
 export default function DashboardPage() {
+  const navigate = useNavigate()
   const [data, setData] = useState<DashboardData>({ result: null })
   const [loading, setLoading] = useState(false)
 
@@ -49,7 +51,13 @@ export default function DashboardPage() {
         <Text type="secondary" style={{ marginTop: 4, display: 'block' }}>
           支持格式：CSV / XLSX / XLSM
         </Text>
-        <div style={{ marginTop: 16 }}>
+        <Text type="warning" style={{ marginTop: 8, display: 'block' }}>
+          生成前请先导入最新的未防护容器节点清单；每次导入都会清除旧快照，只保留最新数据。
+        </Text>
+        <div style={{ marginTop: 16, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <Button onClick={() => navigate('/admin/unprotected-container-nodes')}>
+            导入容器节点清单
+          </Button>
           <Upload
             accept=".csv,.xlsx,.xlsm"
             showUploadList={false}

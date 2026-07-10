@@ -39,6 +39,24 @@ DATASET_DEFINITIONS = {
         "columns": [("server_id", "服务器ID"), ("ip_address", "IP地址"), ("server_name", "服务器名称"), ("note", "备注"), ("updated_at", "更新时间")],
         "search_fields": ["server_id", "ip_address", "server_name", "note"],
     },
+    "unprotected-container-nodes": {
+        "table": "unprotected_container_nodes",
+        "title": "未防护容器节点",
+        "columns": [
+            ("server_name", "服务器名称"),
+            ("server_id", "服务器ID"),
+            ("ip_address", "IP地址"),
+            ("cluster_name", "集群名称"),
+            ("agent_status", "Agent状态"),
+            ("protection_status", "防护状态"),
+            ("server_status", "服务器状态"),
+            ("enterprise_project", "企业项目"),
+            ("provider", "服务商"),
+            ("protection_version", "防护版本"),
+            ("updated_at", "导入时间"),
+        ],
+        "search_fields": ["server_name", "server_id", "ip_address", "cluster_name", "enterprise_project"],
+    },
 }
 
 
@@ -164,6 +182,25 @@ def init_db() -> None:
                 updated_at VARCHAR(32) NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS unprotected_container_nodes (
+                id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                server_name VARCHAR(255) NOT NULL DEFAULT '',
+                server_id VARCHAR(255) NOT NULL DEFAULT '',
+                ip_address VARCHAR(255) NOT NULL DEFAULT '',
+                cluster_name VARCHAR(255) NOT NULL DEFAULT '',
+                cluster_id VARCHAR(255) NOT NULL DEFAULT '',
+                agent_status VARCHAR(64) NOT NULL DEFAULT '',
+                protection_status VARCHAR(64) NOT NULL DEFAULT '',
+                server_status VARCHAR(64) NOT NULL DEFAULT '',
+                enterprise_project VARCHAR(255) NOT NULL DEFAULT '',
+                provider VARCHAR(128) NOT NULL DEFAULT '',
+                agent_id VARCHAR(255) NOT NULL DEFAULT '',
+                protection_version VARCHAR(128) NOT NULL DEFAULT '',
+                has_container_process VARCHAR(16) NOT NULL DEFAULT '',
+                match_key VARCHAR(255) NOT NULL DEFAULT '',
+                updated_at VARCHAR(32) NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS import_histories (
                 id BIGINT PRIMARY KEY AUTO_INCREMENT,
                 file_name VARCHAR(255) NOT NULL,
@@ -276,6 +313,7 @@ def init_db() -> None:
         _ensure_column(connection, "result_histories", "agent_missing_path", "TEXT NULL")
         _ensure_column(connection, "result_histories", "protection_interrupted_path", "TEXT NULL")
         _ensure_column(connection, "result_histories", "missing_owner_projects", "TEXT NULL")
+        _ensure_column(connection, "unprotected_container_nodes", "match_key", "VARCHAR(255) NOT NULL DEFAULT ''")
         _ensure_column(connection, "daily_security_reports", "hss_unclosed_event_count", "INT NOT NULL DEFAULT 0")
         _ensure_column(connection, "daily_security_reports", "secmaster_unclosed_event_count", "INT NOT NULL DEFAULT 0")
         _ensure_column(connection, "daily_security_reports", "waf_screenshot_path", "VARCHAR(255) NOT NULL DEFAULT ''")
@@ -370,6 +408,9 @@ def delete_dataset_record(dataset_key: str, record_id: int) -> None:
 
 
 def import_dataset_records(dataset_key: str, rows: list[dict[str, str]]) -> int:
+    if dataset_key == "unprotected-container-nodes":
+        return _replace_unprotected_container_nodes(rows)
+
     count = 0
     for row in rows:
         payload = map_import_row(dataset_key, row)
@@ -381,6 +422,28 @@ def import_dataset_records(dataset_key: str, rows: list[dict[str, str]]) -> int:
 
 
 def map_import_row(dataset_key: str, row: dict[str, str]) -> dict[str, str] | None:
+    if dataset_key == "unprotected-container-nodes":
+        protection_status = str(row.get("防护状态", row.get("protection_status", "")) or "").strip()
+        has_container_process = str(row.get("存在容器进程", row.get("has_container_process", "")) or "").strip()
+        if protection_status != "未防护" or has_container_process != "是":
+            return None
+
+        return {
+            "server_name": str(row.get("服务器名称", row.get("server_name", "")) or "").strip(),
+            "server_id": str(row.get("服务器ID", row.get("server_id", "")) or "").strip(),
+            "ip_address": str(row.get("IP地址", row.get("ip_address", "")) or "").strip(),
+            "cluster_name": str(row.get("集群名称", row.get("cluster_name", "")) or "").strip(),
+            "cluster_id": str(row.get("集群ID", row.get("cluster_id", "")) or "").strip(),
+            "agent_status": str(row.get("Agent状态", row.get("agent_status", "")) or "").strip(),
+            "protection_status": protection_status,
+            "server_status": str(row.get("服务器状态", row.get("server_status", "")) or "").strip(),
+            "enterprise_project": str(row.get("企业项目", row.get("enterprise_project", "")) or "").strip(),
+            "provider": str(row.get("服务商", row.get("provider", "")) or "").strip(),
+            "agent_id": str(row.get("Agent ID", row.get("agent_id", "")) or "").strip(),
+            "protection_version": str(row.get("防护版本", row.get("protection_version", "")) or "").strip(),
+            "has_container_process": has_container_process,
+        }
+
     if dataset_key == "owner-mappings":
         enterprise_project = row.get("企业项目", row.get("项目", row.get("enterprise_project", ""))).strip()
         owner_name = row.get("负责人", row.get("owner_name", "")).strip()
@@ -809,3 +872,37 @@ def get_email_settings() -> dict[str, object] | None:
 
 def save_email_settings(payload: dict[str, object]) -> None:
     save_app_setting("email_settings", json.dumps(payload, ensure_ascii=False))
+
+
+def _replace_unprotected_container_nodes(rows: list[dict[str, str]]) -> int:
+    payloads = [payload for row in rows if (payload := map_import_row("unprotected-container-nodes", row)) is not None]
+    now = datetime.now().isoformat(timespec="seconds")
+    with get_connection() as connection:
+        connection.execute("DELETE FROM unprotected_container_nodes")
+        for payload in payloads:
+            connection.execute(
+                """
+                INSERT INTO unprotected_container_nodes (
+                    server_name, server_id, ip_address, cluster_name, cluster_id,
+                    agent_status, protection_status, server_status, enterprise_project,
+                    provider, agent_id, protection_version, has_container_process, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    payload["server_name"],
+                    payload["server_id"],
+                    payload["ip_address"],
+                    payload["cluster_name"],
+                    payload["cluster_id"],
+                    payload["agent_status"],
+                    payload["protection_status"],
+                    payload["server_status"],
+                    payload["enterprise_project"],
+                    payload["provider"],
+                    payload["agent_id"],
+                    payload["protection_version"],
+                    payload["has_container_process"],
+                    now,
+                ),
+            )
+    return len(payloads)

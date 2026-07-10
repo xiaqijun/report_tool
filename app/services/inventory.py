@@ -22,6 +22,7 @@ OUTPUT_COLUMNS = [
     "防护状态",
     "操作系统",
     "版本类型",
+    "是否为容器节点",
     "企业项目",
     "来源",
     "负责人",
@@ -37,7 +38,7 @@ ASSET_FIELD_ALIASES = {
     "风险状态": ["风险状态"],
     "防护状态": ["防护状态"],
     "操作系统": ["操作系统", "OS", "os"],
-    "版本类型": ["版本类型"],
+    "版本类型": ["版本类型", "版本"],
     "企业项目": ["企业项目", "项目", "项目名称"],
     "来源": ["来源"],
 }
@@ -56,6 +57,9 @@ def generate_from_asset_file(file_path: Path | BytesIO, operator_name: str, orig
     owner_mapping = get_owner_mapping_dict()
     unquota_keys = get_exclusion_match_keys("unquota-hosts")
     deferred_install_keys = get_exclusion_match_keys("deferred-install-hosts")
+    container_node_keys = get_exclusion_match_keys("unprotected-container-nodes")
+    if not container_node_keys:
+        raise ValueError("请先导入未防护容器节点清单，再生成预警清单。")
     missing_owner_projects: set[str] = set()
 
     online_unprotected: list[dict[str, str]] = []
@@ -70,9 +74,13 @@ def generate_from_asset_file(file_path: Path | BytesIO, operator_name: str, orig
             owner = "翟召宁"
         owner = owner or ""
 
-        output_row = {column: row.get(column, "") for column in OUTPUT_COLUMNS if column != "负责人"}
-        output_row["负责人"] = owner
         match_keys = build_match_keys(row.get("服务器ID", ""), row.get("IP地址", ""), row.get("服务器名称", ""))
+        is_container_version = "容器版" in row.get("版本类型", "").strip()
+        is_imported_container_node = not match_keys.isdisjoint(container_node_keys)
+
+        output_row = {column: row.get(column, "") for column in OUTPUT_COLUMNS if column not in {"负责人", "是否为容器节点"}}
+        output_row["是否为容器节点"] = "是" if is_container_version or is_imported_container_node else "否"
+        output_row["负责人"] = owner
 
         if row["服务器状态"] == "运行中" and row["Agent状态"] == "在线" and row["防护状态"] == "未防护":
             if match_keys.isdisjoint(unquota_keys):
