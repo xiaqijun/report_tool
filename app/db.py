@@ -425,13 +425,16 @@ def map_import_row(dataset_key: str, row: dict[str, str]) -> dict[str, str] | No
     if dataset_key == "unprotected-container-nodes":
         protection_status = str(row.get("防护状态", row.get("protection_status", "")) or "").strip()
         has_container_process = str(row.get("存在容器进程", row.get("has_container_process", "")) or "").strip()
-        if protection_status != "未防护" or has_container_process != "是":
+        server_name = str(row.get("服务器名称", row.get("server_name", "")) or "").strip()
+        server_id = str(row.get("服务器ID", row.get("server_id", "")) or "").strip()
+        ip_address = str(row.get("IP地址", row.get("ip_address", "")) or "").strip()
+        if protection_status != "未防护" or not any((server_name, server_id, ip_address)):
             return None
 
         return {
-            "server_name": str(row.get("服务器名称", row.get("server_name", "")) or "").strip(),
-            "server_id": str(row.get("服务器ID", row.get("server_id", "")) or "").strip(),
-            "ip_address": str(row.get("IP地址", row.get("ip_address", "")) or "").strip(),
+            "server_name": server_name,
+            "server_id": server_id,
+            "ip_address": ip_address,
             "cluster_name": str(row.get("集群名称", row.get("cluster_name", "")) or "").strip(),
             "cluster_id": str(row.get("集群ID", row.get("cluster_id", "")) or "").strip(),
             "agent_status": str(row.get("Agent状态", row.get("agent_status", "")) or "").strip(),

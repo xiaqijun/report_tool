@@ -69,6 +69,10 @@ export default function AdminPage() {
   const [formApi, setFormApi] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [pagination, setPagination] = useState({ current: 1, total: 0 })
+  const [tencentDocsSettings, setTencentDocsSettings] = useState<any>(null)
+  const [tencentDocsModalVisible, setTencentDocsModalVisible] = useState(false)
+  const [tencentDocsFormApi, setTencentDocsFormApi] = useState<any>(null)
+  const [tencentDocsSyncing, setTencentDocsSyncing] = useState(false)
 
   const config = datasetKey ? datasetConfigs[datasetKey] : null
 
@@ -88,7 +92,28 @@ export default function AdminPage() {
 
   useEffect(() => {
     fetchData()
+    if (datasetKey === 'unprotected-container-nodes') {
+      fetchTencentDocsSettings()
+      const oauthStatus = new URLSearchParams(window.location.search).get('tencent_docs')
+      if (oauthStatus === 'authorized') {
+        Toast.success('腾讯文档授权成功')
+      } else if (oauthStatus) {
+        Toast.error('腾讯文档授权失败，请检查配置后重试')
+      }
+      if (oauthStatus) {
+        window.history.replaceState({}, '', window.location.pathname)
+      }
+    }
   }, [datasetKey])
+
+  const fetchTencentDocsSettings = async () => {
+    try {
+      const response = await api.get('/api/tencent-docs/settings')
+      setTencentDocsSettings(response.data.settings)
+    } catch {
+      Toast.error('获取腾讯文档配置失败')
+    }
+  }
 
   const handleAdd = () => {
     setEditingRecord(null)
@@ -144,6 +169,39 @@ export default function AdminPage() {
     }
   }
 
+  const handleSaveTencentDocsSettings = async (values: any) => {
+    try {
+      const response = await api.post('/api/tencent-docs/settings', values)
+      setTencentDocsSettings(response.data.settings)
+      setTencentDocsModalVisible(false)
+      Toast.success('腾讯文档配置已保存')
+    } catch (error: any) {
+      Toast.error(error.response?.data?.detail || '保存腾讯文档配置失败')
+    }
+  }
+
+  const handleTencentDocsAuthorize = () => {
+    if (!tencentDocsSettings?.client_id || !tencentDocsSettings?.has_client_secret || !tencentDocsSettings?.redirect_uri) {
+      Toast.warning('请先完成腾讯文档应用配置')
+      setTencentDocsModalVisible(true)
+      return
+    }
+    window.location.href = '/api/tencent-docs/authorize'
+  }
+
+  const handleTencentDocsSync = async () => {
+    setTencentDocsSyncing(true)
+    try {
+      const response = await api.post('/api/tencent-docs/sync')
+      Toast.success(`腾讯文档同步成功，共 ${response.data.count ?? 0} 条`)
+      await Promise.all([fetchData(), fetchTencentDocsSettings()])
+    } catch (error: any) {
+      Toast.error(error.response?.data?.detail || '腾讯文档同步失败')
+    } finally {
+      setTencentDocsSyncing(false)
+    }
+  }
+
   if (!config) {
     return <div>未知数据集</div>
   }
@@ -182,6 +240,17 @@ export default function AdminPage() {
         <Title heading={4} style={{ margin: 0 }}>{config.title}</Title>
         {config.importHint && <div style={{ marginTop: 8, color: 'var(--semi-color-text-2)' }}>{config.importHint}</div>}
       </div>
+      {datasetKey === 'unprotected-container-nodes' && (
+        <div style={{ marginBottom: 16, padding: '12px 16px', borderRadius: 8, background: '#fff', border: '1px solid var(--semi-color-border)' }}>
+          <strong>腾讯文档：</strong>
+          <span style={{ marginLeft: 8 }}>{tencentDocsSettings?.authorized ? '已授权' : '未授权'}</span>
+          {tencentDocsSettings?.last_sync_at && (
+            <span style={{ marginLeft: 16, color: 'var(--semi-color-text-2)' }}>
+              最近同步 {tencentDocsSettings.last_sync_at}，{tencentDocsSettings.last_sync_count ?? 0} 条
+            </span>
+          )}
+        </div>
+      )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <Input
@@ -201,6 +270,17 @@ export default function AdminPage() {
           >
             <Button icon={<IconUpload />}>导入数据</Button>
           </Upload>
+          {datasetKey === 'unprotected-container-nodes' && (
+            <>
+              <Button onClick={() => setTencentDocsModalVisible(true)}>腾讯文档配置</Button>
+              <Button onClick={handleTencentDocsAuthorize}>
+                {tencentDocsSettings?.authorized ? '重新授权' : '腾讯文档授权'}
+              </Button>
+              <Button type="primary" loading={tencentDocsSyncing} onClick={handleTencentDocsSync}>
+                同步腾讯文档
+              </Button>
+            </>
+          )}
           {config.template_filename && (
             <Button icon={<IconDownload />} onClick={() => window.open(`/static/import-templates/${config.template_filename}`)}>
               下载模板
@@ -243,6 +323,39 @@ export default function AdminPage() {
             {config.columns.map(([key, label]) => (
               <Form.Input key={key} field={key} label={label} />
             ))}
+          </Form>
+        </Modal>
+      )}
+
+      {datasetKey === 'unprotected-container-nodes' && (
+        <Modal
+          title="腾讯文档开放 API 配置"
+          visible={tencentDocsModalVisible}
+          onOk={() => tencentDocsFormApi?.submitForm()}
+          onCancel={() => setTencentDocsModalVisible(false)}
+          width={640}
+        >
+          <Form
+            initValues={{ ...tencentDocsSettings, client_secret: '' }}
+            onSubmit={handleSaveTencentDocsSettings}
+            getFormApi={(formApi) => setTencentDocsFormApi(formApi)}
+          >
+            <Form.Input field="client_id" label="Client ID" rules={[{ required: true, message: '请输入 Client ID' }]} />
+            <Form.Input
+              field="client_secret"
+              label="Client Secret"
+              type="password"
+              placeholder={tencentDocsSettings?.has_client_secret ? '已保存，留空表示不修改' : '请输入 Client Secret'}
+            />
+            <Form.Input
+              field="redirect_uri"
+              label="OAuth 回调地址"
+              placeholder="https://你的域名/api/tencent-docs/callback"
+              rules={[{ required: true, message: '请输入 HTTPS 回调地址' }]}
+            />
+            <Form.Input field="file_id" label="腾讯文档链接 / File ID" rules={[{ required: true, message: '请输入表格链接或 File ID' }]} />
+            <Form.Input field="sheet_id" label="Sheet ID（可选）" placeholder="留空自动读取第一个工作表" />
+            <Form.Input field="sheet_range" label="读取范围" placeholder="A1:T500" />
           </Form>
         </Modal>
       )}

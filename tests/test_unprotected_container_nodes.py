@@ -29,12 +29,23 @@ class UnprotectedContainerNodeTests(TestCase):
         self.assertEqual(payload["cluster_name"], "cluster-a")
         self.assertEqual(payload["has_container_process"], "是")
 
-    def test_map_import_row_excludes_protected_or_non_container_node(self) -> None:
-        protected = {"防护状态": "防护中", "存在容器进程": "是"}
-        no_container = {"防护状态": "未防护", "存在容器进程": "否"}
+    def test_map_import_row_keeps_unprotected_rows_regardless_of_process_flag(self) -> None:
+        protected = {
+            "服务器ID": "server-protected",
+            "防护状态": "防护中",
+            "存在容器进程": "是",
+        }
+        no_container = {
+            "服务器ID": "server-2",
+            "防护状态": "未防护",
+            "存在容器进程": "否",
+        }
 
         self.assertIsNone(db.map_import_row("unprotected-container-nodes", protected))
-        self.assertIsNone(db.map_import_row("unprotected-container-nodes", no_container))
+        self.assertEqual(
+            db.map_import_row("unprotected-container-nodes", no_container)["has_container_process"],
+            "否",
+        )
 
     def test_import_replaces_previous_snapshot(self) -> None:
         rows = [
@@ -59,6 +70,6 @@ class UnprotectedContainerNodeTests(TestCase):
         with patch.object(db, "get_connection", return_value=connection_context):
             count = db.import_dataset_records("unprotected-container-nodes", rows)
 
-        self.assertEqual(count, 1)
+        self.assertEqual(count, 2)
         self.assertEqual(connection.execute.call_args_list[0].args, ("DELETE FROM unprotected_container_nodes",))
-        self.assertEqual(connection.execute.call_count, 2)
+        self.assertEqual(connection.execute.call_count, 3)

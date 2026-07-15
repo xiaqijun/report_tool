@@ -1,9 +1,12 @@
 """JSON API endpoints for React frontend."""
 
 from pathlib import Path
+import secrets
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, RedirectResponse
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 from typing import Optional
 import os
 
@@ -21,6 +24,15 @@ class LoginRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
+
+
+class TencentDocsSettingsRequest(BaseModel):
+    client_id: str = ""
+    client_secret: str = ""
+    redirect_uri: str = ""
+    file_id: str = ""
+    sheet_id: str = ""
+    sheet_range: str = "A1:T500"
 
 
 @router.post("/login")
@@ -568,6 +580,91 @@ async def api_admin_import(request: Request, dataset_key: str, import_file: Uplo
         return {"success": True, "count": count}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/tencent-docs/settings")
+async def api_tencent_docs_settings(request: Request):
+    """Return non-sensitive Tencent Docs integration settings."""
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+
+    from ..services.tencent_docs import get_public_settings
+
+    return {"settings": get_public_settings()}
+
+
+@router.post("/tencent-docs/settings")
+async def api_save_tencent_docs_settings(request: Request, body: TencentDocsSettingsRequest):
+    """Save Tencent Docs OAuth and spreadsheet configuration."""
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+
+    from ..services.tencent_docs import save_configuration
+
+    try:
+        settings = save_configuration(body.model_dump())
+        return {"success": True, "settings": settings}
+    except Exception as error:
+        raise HTTPException(status_code=400, detail=str(error))
+
+
+@router.get("/tencent-docs/authorize", response_model=None)
+async def api_tencent_docs_authorize(request: Request):
+    """Start Tencent Docs OAuth2 authorization-code flow."""
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+
+    from ..services.tencent_docs import build_authorize_url
+
+    try:
+        state = secrets.token_urlsafe(24)
+        request.session["tencent_docs_oauth_state"] = state
+        return RedirectResponse(build_authorize_url(state), status_code=302)
+    except Exception as error:
+        raise HTTPException(status_code=400, detail=str(error))
+
+
+@router.get("/tencent-docs/callback", response_model=None)
+async def api_tencent_docs_callback(
+    request: Request, code: str = "", state: str = "", error: str = "", error_description: str = ""
+):
+    """Handle Tencent Docs OAuth callback and persist user tokens."""
+    expected_state = str(request.session.pop("tencent_docs_oauth_state", "") or "")
+    if not expected_state or not secrets.compare_digest(expected_state, state):
+        return RedirectResponse("/admin/unprotected-container-nodes?tencent_docs=invalid_state", status_code=302)
+    if error:
+        request.session["tencent_docs_error"] = error_description or error
+        return RedirectResponse("/admin/unprotected-container-nodes?tencent_docs=error", status_code=302)
+    if not code:
+        return RedirectResponse("/admin/unprotected-container-nodes?tencent_docs=missing_code", status_code=302)
+
+    from ..services.tencent_docs import exchange_authorization_code
+
+    try:
+        await run_in_threadpool(exchange_authorization_code, code)
+        return RedirectResponse("/admin/unprotected-container-nodes?tencent_docs=authorized", status_code=302)
+    except Exception as exchange_error:
+        request.session["tencent_docs_error"] = str(exchange_error)
+        return RedirectResponse("/admin/unprotected-container-nodes?tencent_docs=exchange_error", status_code=302)
+
+
+@router.post("/tencent-docs/sync")
+async def api_tencent_docs_sync(request: Request):
+    """Read the configured Tencent Docs sheet and replace the local node snapshot."""
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+
+    from ..services.tencent_docs import sync_container_nodes
+
+    try:
+        result = await run_in_threadpool(sync_container_nodes)
+        return {"success": True, **result}
+    except Exception as sync_error:
+        raise HTTPException(status_code=400, detail=str(sync_error))
 
 
 @router.post("/change-password")
