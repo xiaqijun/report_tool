@@ -313,6 +313,10 @@ def init_db() -> None:
         _ensure_column(connection, "result_histories", "agent_missing_path", "TEXT NULL")
         _ensure_column(connection, "result_histories", "protection_interrupted_path", "TEXT NULL")
         _ensure_column(connection, "result_histories", "missing_owner_projects", "TEXT NULL")
+        _ensure_column(connection, "result_histories", "tencent_online_unprotected_url", "TEXT NULL")
+        _ensure_column(connection, "result_histories", "tencent_agent_missing_url", "TEXT NULL")
+        _ensure_column(connection, "result_histories", "tencent_protection_interrupted_url", "TEXT NULL")
+        _ensure_column(connection, "result_histories", "tencent_docs_synced_at", "VARCHAR(32) NULL")
         _ensure_column(connection, "unprotected_container_nodes", "match_key", "VARCHAR(255) NOT NULL DEFAULT ''")
         _ensure_column(connection, "daily_security_reports", "hss_unclosed_event_count", "INT NOT NULL DEFAULT 0")
         _ensure_column(connection, "daily_security_reports", "secmaster_unclosed_event_count", "INT NOT NULL DEFAULT 0")
@@ -556,6 +560,32 @@ def list_result_histories(search: str = "", page: int = 1, page_size: int = 20) 
 def get_result_history(batch_code: str) -> dict[str, object] | None:
     with get_connection() as connection:
         return connection.execute("SELECT * FROM result_histories WHERE batch_code = ?", (batch_code,)).fetchone()
+
+
+def update_result_history_tencent_docs(
+    batch_code: str,
+    online_unprotected_url: str,
+    agent_missing_url: str,
+    protection_interrupted_url: str,
+) -> None:
+    with get_connection() as connection:
+        connection.execute(
+            """
+            UPDATE result_histories
+            SET tencent_online_unprotected_url = ?,
+                tencent_agent_missing_url = ?,
+                tencent_protection_interrupted_url = ?,
+                tencent_docs_synced_at = ?
+            WHERE batch_code = ?
+            """,
+            (
+                online_unprotected_url,
+                agent_missing_url,
+                protection_interrupted_url,
+                datetime.now().isoformat(timespec="seconds"),
+                batch_code,
+            ),
+        )
 
 
 def delete_result_history(batch_code: str) -> None:

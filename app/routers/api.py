@@ -30,9 +30,7 @@ class TencentDocsSettingsRequest(BaseModel):
     client_id: str = ""
     client_secret: str = ""
     redirect_uri: str = ""
-    file_id: str = ""
-    sheet_id: str = ""
-    sheet_range: str = "A1:T500"
+    parent_folder_id: str = ""
 
 
 @router.post("/login")
@@ -634,34 +632,34 @@ async def api_tencent_docs_callback(
     """Handle Tencent Docs OAuth callback and persist user tokens."""
     expected_state = str(request.session.pop("tencent_docs_oauth_state", "") or "")
     if not expected_state or not secrets.compare_digest(expected_state, state):
-        return RedirectResponse("/admin/unprotected-container-nodes?tencent_docs=invalid_state", status_code=302)
+        return RedirectResponse("/history?tencent_docs=invalid_state", status_code=302)
     if error:
         request.session["tencent_docs_error"] = error_description or error
-        return RedirectResponse("/admin/unprotected-container-nodes?tencent_docs=error", status_code=302)
+        return RedirectResponse("/history?tencent_docs=error", status_code=302)
     if not code:
-        return RedirectResponse("/admin/unprotected-container-nodes?tencent_docs=missing_code", status_code=302)
+        return RedirectResponse("/history?tencent_docs=missing_code", status_code=302)
 
     from ..services.tencent_docs import exchange_authorization_code
 
     try:
         await run_in_threadpool(exchange_authorization_code, code)
-        return RedirectResponse("/admin/unprotected-container-nodes?tencent_docs=authorized", status_code=302)
+        return RedirectResponse("/history?tencent_docs=authorized", status_code=302)
     except Exception as exchange_error:
         request.session["tencent_docs_error"] = str(exchange_error)
-        return RedirectResponse("/admin/unprotected-container-nodes?tencent_docs=exchange_error", status_code=302)
+        return RedirectResponse("/history?tencent_docs=exchange_error", status_code=302)
 
 
-@router.post("/tencent-docs/sync")
-async def api_tencent_docs_sync(request: Request):
-    """Read the configured Tencent Docs sheet and replace the local node snapshot."""
+@router.post("/history/{batch_code}/tencent-docs/sync")
+async def api_tencent_docs_sync(request: Request, batch_code: str):
+    """Upload the three generated files in a history record to Tencent Docs."""
     user = require_login(request)
     if not isinstance(user, dict):
         raise HTTPException(status_code=401, detail="未登录")
 
-    from ..services.tencent_docs import sync_container_nodes
+    from ..services.tencent_docs import sync_history_documents
 
     try:
-        result = await run_in_threadpool(sync_container_nodes)
+        result = await run_in_threadpool(sync_history_documents, batch_code)
         return {"success": True, **result}
     except Exception as sync_error:
         raise HTTPException(status_code=400, detail=str(sync_error))

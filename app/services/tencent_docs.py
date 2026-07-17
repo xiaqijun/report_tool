@@ -1,6 +1,9 @@
+import hashlib
 import json
+import time
 from datetime import datetime, timedelta
-from urllib.parse import parse_qs, quote, urlencode, urlparse
+from pathlib import Path
+from urllib.parse import urlencode, urlparse
 
 import requests
 
@@ -9,7 +12,26 @@ from app import db
 
 SETTINGS_KEY = "tencent_docs_settings"
 TENCENT_DOCS_BASE_URL = "https://docs.qq.com"
-DEFAULT_RANGE = "A1:T500"
+IMPORT_PROGRESS_ATTEMPTS = 60
+IMPORT_PROGRESS_INTERVAL_SECONDS = 0.5
+
+HISTORY_DOCUMENTS = {
+    "online_unprotected": (
+        "online_unprotected_path",
+        "tencent_online_unprotected_url",
+        "在线未防护",
+    ),
+    "agent_missing": (
+        "agent_missing_path",
+        "tencent_agent_missing_url",
+        "Agent 未安装",
+    ),
+    "protection_interrupted": (
+        "protection_interrupted_path",
+        "tencent_protection_interrupted_url",
+        "防护中断",
+    ),
+}
 
 
 def get_settings() -> dict[str, object]:
@@ -28,57 +50,25 @@ def get_public_settings() -> dict[str, object]:
     return {
         "client_id": settings.get("client_id", ""),
         "redirect_uri": settings.get("redirect_uri", ""),
-        "file_id": settings.get("file_id", ""),
-        "sheet_id": settings.get("sheet_id", ""),
-        "sheet_range": settings.get("sheet_range", DEFAULT_RANGE),
+        "parent_folder_id": settings.get("parent_folder_id", ""),
         "has_client_secret": bool(settings.get("client_secret")),
         "authorized": bool(settings.get("access_token") and settings.get("open_id")),
-        "open_id": settings.get("open_id", ""),
         "token_expires_at": settings.get("token_expires_at", ""),
-        "last_sync_at": settings.get("last_sync_at", ""),
-        "last_sync_count": settings.get("last_sync_count", 0),
     }
 
 
 def save_configuration(payload: dict[str, object]) -> dict[str, object]:
     settings = get_settings()
-    for key in ("client_id", "redirect_uri", "sheet_id", "sheet_range"):
+    for key in ("client_id", "redirect_uri", "parent_folder_id"):
         if key in payload:
             settings[key] = str(payload.get(key, "") or "").strip()
-
-    source = str(payload.get("file_id", payload.get("document_url", "")) or "").strip()
-    if source:
-        settings["file_id"] = extract_file_id(source)
 
     client_secret = str(payload.get("client_secret", "") or "").strip()
     if client_secret:
         settings["client_secret"] = client_secret
 
-    settings["sheet_range"] = str(settings.get("sheet_range") or DEFAULT_RANGE).strip()
     _save_settings(settings)
     return get_public_settings()
-
-
-def extract_file_id(value: str) -> str:
-    source = value.strip()
-    if not source:
-        return ""
-    if "://" not in source:
-        return source
-
-    parsed = urlparse(source)
-    path_parts = [part for part in parsed.path.split("/") if part]
-    for marker in ("sheet", "sheets"):
-        if marker in path_parts:
-            index = path_parts.index(marker)
-            if index + 1 < len(path_parts):
-                return path_parts[index + 1]
-
-    query = parse_qs(parsed.query)
-    for key in ("fileId", "file_id", "id"):
-        if query.get(key):
-            return query[key][0]
-    raise ValueError("无法从腾讯文档链接中识别在线表格 File ID。")
 
 
 def build_authorize_url(state: str) -> str:
@@ -102,6 +92,7 @@ def build_authorize_url(state: str) -> str:
 def exchange_authorization_code(code: str) -> dict[str, object]:
     settings = _require_configuration()
     token_data = _request_json(
+        "GET",
         "/oauth/v2/token",
         params={
             "client_id": settings["client_id"],
@@ -115,87 +106,124 @@ def exchange_authorization_code(code: str) -> dict[str, object]:
     return get_public_settings()
 
 
-def sync_container_nodes() -> dict[str, object]:
+def sync_history_documents(batch_code: str) -> dict[str, object]:
+    history = db.get_result_history(batch_code)
+    if history is None:
+        raise ValueError("未找到对应的生成历史记录。")
+
     settings = _ensure_access_token()
-    headers = {
+    headers = _auth_headers(settings)
+    links: dict[str, str] = {}
+
+    for result_key, (path_field, url_field, title) in HISTORY_DOCUMENTS.items():
+        existing_url = str(history.get(url_field, "") or "").strip()
+        if existing_url:
+            links[result_key] = existing_url
+            continue
+
+        file_path = Path(str(history.get(path_field, "") or ""))
+        if not file_path.is_file():
+            raise ValueError(f"{title}文件不存在：{file_path}")
+        imported = _import_document(file_path, settings, headers)
+        links[result_key] = str(imported["url"])
+
+    db.update_result_history_tencent_docs(
+        batch_code,
+        links["online_unprotected"],
+        links["agent_missing"],
+        links["protection_interrupted"],
+    )
+    return {"batch_code": batch_code, "links": links, "count": len(links)}
+
+
+def _import_document(
+    file_path: Path,
+    settings: dict[str, object],
+    headers: dict[str, str],
+) -> dict[str, str]:
+    content = file_path.read_bytes()
+    file_md5 = hashlib.md5(content).hexdigest()
+    pre_import = _request_json(
+        "POST",
+        "/openapi/drive/v2/files/upload",
+        headers=headers,
+        data={
+            "fileMD5": file_md5,
+            "fileName": file_path.name,
+            "fileSize": len(content),
+        },
+    )
+    pre_import_data = _unwrap_data(pre_import)
+    cos_put_url = str(pre_import_data.get("COSPutURL", "") or "")
+    cos_file_key = str(pre_import_data.get("COSFileKey", "") or "")
+    custom_headers = pre_import_data.get("CustomHeader", {})
+    if not cos_put_url or not cos_file_key or not isinstance(custom_headers, dict):
+        raise ValueError("腾讯文档预导入响应缺少 COS 上传信息。")
+    _validate_cos_put_url(cos_put_url)
+
+    upload_response = requests.put(
+        cos_put_url,
+        headers={str(key): str(value) for key, value in custom_headers.items()},
+        data=content,
+        timeout=120,
+    )
+    upload_response.raise_for_status()
+
+    import_payload: dict[str, object] = {
+        "fileMD5": file_md5,
+        "fileName": file_path.name,
+        "COSFileKey": cos_file_key,
+    }
+    parent_folder_id = str(settings.get("parent_folder_id", "") or "").strip()
+    if parent_folder_id:
+        import_payload["parentfolderID"] = parent_folder_id
+
+    async_import = _request_json(
+        "POST",
+        "/openapi/drive/v2/files/async-import",
+        headers=headers,
+        data=import_payload,
+    )
+    progress_query_id = str(_unwrap_data(async_import).get("progressQueryID", "") or "")
+    if not progress_query_id:
+        raise ValueError("腾讯文档异步导入响应缺少进度查询凭证。")
+
+    for _ in range(IMPORT_PROGRESS_ATTEMPTS):
+        progress_response = _request_json(
+            "GET",
+            "/openapi/drive/v2/files/import-progress",
+            headers=headers,
+            params={"progressQueryID": progress_query_id},
+        )
+        progress_data = _unwrap_data(progress_response)
+        progress = int(progress_data.get("progress", 0) or 0)
+        document_url = str(progress_data.get("url", "") or "")
+        if progress >= 100:
+            if not document_url:
+                raise ValueError("腾讯文档导入已完成，但未返回文档链接。")
+            return {
+                "id": str(progress_data.get("ID", "") or ""),
+                "title": str(progress_data.get("title", file_path.stem) or file_path.stem),
+                "url": document_url,
+            }
+        time.sleep(IMPORT_PROGRESS_INTERVAL_SECONDS)
+
+    raise TimeoutError(f"腾讯文档导入超时：{file_path.name}")
+
+
+def _auth_headers(settings: dict[str, object]) -> dict[str, str]:
+    return {
         "Access-Token": str(settings["access_token"]),
         "Client-Id": str(settings["client_id"]),
         "Open-Id": str(settings["open_id"]),
     }
-    file_id = extract_file_id(str(settings.get("file_id", "")))
-    if not file_id:
-        raise ValueError("请配置腾讯文档在线表格链接或 File ID。")
-
-    sheet_id = str(settings.get("sheet_id", "") or "").strip()
-    if not sheet_id:
-        workbook = _request_json(
-            f"/openapi/spreadsheet/v3/files/{quote(file_id, safe='$')}",
-            headers=headers,
-            params={"concise": 1},
-        )
-        workbook_data = _unwrap_data(workbook)
-        properties = workbook_data.get("properties", []) if isinstance(workbook_data, dict) else []
-        if not properties:
-            raise ValueError("腾讯文档在线表格中没有可读取的工作表。")
-        sheet_id = str(properties[0].get("sheetId", "") or "").strip()
-        settings["sheet_id"] = sheet_id
-
-    sheet_range = str(settings.get("sheet_range", DEFAULT_RANGE) or DEFAULT_RANGE).strip()
-    response = _request_json(
-        f"/openapi/spreadsheet/v3/files/{quote(file_id, safe='$')}/{quote(sheet_id, safe='')}/{quote(sheet_range, safe=':')}",
-        headers=headers,
-    )
-    response_data = _unwrap_data(response)
-    grid_data = response_data.get("gridData", {}) if isinstance(response_data, dict) else {}
-    rows = grid_data_to_records(grid_data)
-    count = db.import_dataset_records("unprotected-container-nodes", rows)
-
-    settings["file_id"] = file_id
-    settings["sheet_id"] = sheet_id
-    settings["last_sync_at"] = datetime.now().isoformat(timespec="seconds")
-    settings["last_sync_count"] = count
-    _save_settings(settings)
-    return {"count": count, "source_rows": len(rows), "sheet_id": sheet_id, "sheet_range": sheet_range}
 
 
-def grid_data_to_records(grid_data: object) -> list[dict[str, str]]:
-    if not isinstance(grid_data, dict):
-        return []
-    matrix: list[list[str]] = []
-    for row in grid_data.get("rows", []):
-        if not isinstance(row, dict):
-            continue
-        values = row.get("values", [])
-        matrix.append([_cell_text(cell) for cell in values] if isinstance(values, list) else [])
-    if not matrix:
-        return []
-
-    headers = [value.strip() for value in matrix[0]]
-    records: list[dict[str, str]] = []
-    for values in matrix[1:]:
-        record = {
-            header: values[index].strip() if index < len(values) else ""
-            for index, header in enumerate(headers)
-            if header
-        }
-        if any(record.values()):
-            records.append(record)
-    return records
-
-
-def _cell_text(cell: object) -> str:
-    if not isinstance(cell, dict):
-        return ""
-    cell_value = cell.get("cellValue", {})
-    if isinstance(cell_value, (str, int, float, bool)):
-        return str(cell_value)
-    if not isinstance(cell_value, dict):
-        return ""
-    for key in ("text", "number", "boolean", "value", "formattedValue"):
-        value = cell_value.get(key)
-        if value is not None:
-            return str(value)
-    return ""
+def _validate_cos_put_url(value: str) -> None:
+    parsed = urlparse(value)
+    hostname = str(parsed.hostname or "").lower()
+    if parsed.scheme != "https" or not hostname.endswith(".myqcloud.com"):
+        raise ValueError("腾讯文档返回了不可信的 COS 上传地址。")
 
 
 def _ensure_access_token() -> dict[str, object]:
@@ -219,6 +247,7 @@ def _refresh_access_token(settings: dict[str, object]) -> dict[str, object]:
     if not refresh_token:
         raise ValueError("腾讯文档授权已过期，请重新授权。")
     token_data = _request_json(
+        "GET",
         "/oauth/v2/token",
         params={
             "client_id": settings["client_id"],
@@ -260,22 +289,29 @@ def _require_configuration(*, require_secret: bool = True) -> dict[str, object]:
 
 
 def _request_json(
-    path: str, *, params: dict[str, object] | None = None, headers: dict[str, str] | None = None
+    method: str,
+    path: str,
+    *,
+    params: dict[str, object] | None = None,
+    data: dict[str, object] | None = None,
+    headers: dict[str, str] | None = None,
 ) -> dict[str, object]:
-    response = requests.get(
+    response = requests.request(
+        method,
         f"{TENCENT_DOCS_BASE_URL}{path}",
         params=params,
+        data=data,
         headers={"Accept": "application/json", **(headers or {})},
         timeout=30,
     )
     response.raise_for_status()
-    data = response.json()
-    if not isinstance(data, dict):
+    payload = response.json()
+    if not isinstance(payload, dict):
         raise ValueError("腾讯文档接口返回了无法识别的数据。")
-    error_code = data.get("ret", data.get("code", 0))
+    error_code = payload.get("ret", payload.get("code", 0))
     if error_code not in (0, None):
-        raise ValueError(str(data.get("msg", data.get("message", f"腾讯文档接口错误：{error_code}"))))
-    return data
+        raise ValueError(str(payload.get("msg", payload.get("message", f"腾讯文档接口错误：{error_code}"))))
+    return payload
 
 
 def _unwrap_data(payload: dict[str, object]) -> dict[str, object]:

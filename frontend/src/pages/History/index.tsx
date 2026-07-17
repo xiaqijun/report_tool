@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Table, Button, Input, Toast, Popconfirm, Typography, Modal, Space, TextArea, Spin } from '@douyinfe/semi-ui'
-import { IconSearch, IconDelete, IconDownload, IconMail } from '@douyinfe/semi-icons'
+import { Table, Button, Input, Toast, Popconfirm, Typography, Modal, Space, TextArea, Spin, Form } from '@douyinfe/semi-ui'
+import { IconSearch, IconDelete, IconDownload, IconMail, IconUpload } from '@douyinfe/semi-icons'
 import api from '../../api'
 
 const { Text } = Typography
@@ -14,6 +14,10 @@ interface HistoryRecord {
   agent_missing_count: number
   protection_interrupted_count: number
   missing_owner_count: number
+  tencent_online_unprotected_url?: string
+  tencent_agent_missing_url?: string
+  tencent_protection_interrupted_url?: string
+  tencent_docs_synced_at?: string
 }
 
 export default function HistoryPage() {
@@ -31,6 +35,10 @@ export default function HistoryPage() {
   const [previewVisible, setPreviewVisible] = useState(false)
   const [previewHtml, setPreviewHtml] = useState('')
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [tencentDocsSettings, setTencentDocsSettings] = useState<any>(null)
+  const [tencentDocsModalVisible, setTencentDocsModalVisible] = useState(false)
+  const [tencentDocsFormApi, setTencentDocsFormApi] = useState<any>(null)
+  const [syncingBatch, setSyncingBatch] = useState('')
 
   const fetchData = async (page = 1, q = '') => {
     setLoading(true)
@@ -47,7 +55,63 @@ export default function HistoryPage() {
 
   useEffect(() => {
     fetchData()
+    fetchTencentDocsSettings()
+    const oauthStatus = new URLSearchParams(window.location.search).get('tencent_docs')
+    if (oauthStatus === 'authorized') {
+      Toast.success('腾讯文档授权成功')
+    } else if (oauthStatus) {
+      Toast.error('腾讯文档授权失败，请检查配置后重试')
+    }
+    if (oauthStatus) {
+      window.history.replaceState({}, '', window.location.pathname)
+    }
   }, [])
+
+  const fetchTencentDocsSettings = async () => {
+    try {
+      const response = await api.get('/api/tencent-docs/settings')
+      setTencentDocsSettings(response.data.settings)
+    } catch {
+      Toast.error('获取腾讯文档配置失败')
+    }
+  }
+
+  const handleSaveTencentDocsSettings = async (values: any) => {
+    try {
+      const response = await api.post('/api/tencent-docs/settings', values)
+      setTencentDocsSettings(response.data.settings)
+      setTencentDocsModalVisible(false)
+      Toast.success('腾讯文档配置已保存')
+    } catch (error: any) {
+      Toast.error(error.response?.data?.detail || '保存腾讯文档配置失败')
+    }
+  }
+
+  const handleTencentDocsAuthorize = () => {
+    if (!tencentDocsSettings?.client_id || !tencentDocsSettings?.has_client_secret || !tencentDocsSettings?.redirect_uri) {
+      Toast.warning('请先完成腾讯文档应用配置')
+      setTencentDocsModalVisible(true)
+      return
+    }
+    window.location.href = '/api/tencent-docs/authorize'
+  }
+
+  const handleTencentDocsSync = async (batchCode: string) => {
+    if (!tencentDocsSettings?.authorized) {
+      Toast.warning('请先完成腾讯文档授权')
+      return
+    }
+    setSyncingBatch(batchCode)
+    try {
+      await api.post(`/api/history/${batchCode}/tencent-docs/sync`)
+      Toast.success('三个报表已同步到腾讯文档')
+      await fetchData(pagination.current, searchQuery)
+    } catch (error: any) {
+      Toast.error(error.response?.data?.detail || '同步腾讯文档失败')
+    } finally {
+      setSyncingBatch('')
+    }
+  }
 
   const handleDelete = async (batchCode: string) => {
     try {
@@ -137,6 +201,41 @@ export default function HistoryPage() {
     { title: '防护中断', dataIndex: 'protection_interrupted_count', key: 'protection_interrupted_count', width: 90, align: 'center' as const },
     { title: '缺失负责人', dataIndex: 'missing_owner_count', key: 'missing_owner_count', width: 90, align: 'center' as const },
     {
+      title: '腾讯文档',
+      key: 'tencent_docs',
+      width: 230,
+      render: (_: any, record: HistoryRecord) => {
+        const links = [
+          ['未防护', record.tencent_online_unprotected_url],
+          ['未安装', record.tencent_agent_missing_url],
+          ['防护中断', record.tencent_protection_interrupted_url],
+        ]
+        const synced = links.every(([, url]) => Boolean(url))
+        if (!synced) {
+          return (
+            <Button
+              size="small"
+              type="primary"
+              icon={<IconUpload />}
+              loading={syncingBatch === record.batch_code}
+              onClick={() => handleTencentDocsSync(record.batch_code)}
+            >
+              同步三个报表
+            </Button>
+          )
+        }
+        return (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {links.map(([label, url]) => (
+              <Button key={label} size="small" onClick={() => window.open(url, '_blank')}>
+                {label}
+              </Button>
+            ))}
+          </div>
+        )
+      },
+    },
+    {
       title: '操作',
       key: 'action',
       width: 350,
@@ -170,7 +269,14 @@ export default function HistoryPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <Text>腾讯文档：{tencentDocsSettings?.authorized ? '已授权' : '未授权'}</Text>
+          <Button onClick={() => setTencentDocsModalVisible(true)}>配置</Button>
+          <Button onClick={handleTencentDocsAuthorize}>
+            {tencentDocsSettings?.authorized ? '重新授权' : '授权'}
+          </Button>
+        </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <Input
             placeholder="搜索..."
@@ -195,6 +301,39 @@ export default function HistoryPage() {
           onPageChange: (page) => fetchData(page, searchQuery),
         }}
       />
+
+      <Modal
+        title="腾讯文档开放 API 配置"
+        visible={tencentDocsModalVisible}
+        onOk={() => tencentDocsFormApi?.submitForm()}
+        onCancel={() => setTencentDocsModalVisible(false)}
+        width={640}
+      >
+        <Form
+          initValues={{ ...tencentDocsSettings, client_secret: '' }}
+          onSubmit={handleSaveTencentDocsSettings}
+          getFormApi={(formApi) => setTencentDocsFormApi(formApi)}
+        >
+          <Form.Input field="client_id" label="Client ID" rules={[{ required: true, message: '请输入 Client ID' }]} />
+          <Form.Input
+            field="client_secret"
+            label="Client Secret"
+            type="password"
+            placeholder={tencentDocsSettings?.has_client_secret ? '已保存，留空表示不修改' : '请输入 Client Secret'}
+          />
+          <Form.Input
+            field="redirect_uri"
+            label="OAuth 回调地址"
+            placeholder="https://你的域名/api/tencent-docs/callback"
+            rules={[{ required: true, message: '请输入 HTTPS 回调地址' }]}
+          />
+          <Form.Input
+            field="parent_folder_id"
+            label="目标文件夹 ID（可选）"
+            placeholder="留空则同步到腾讯文档根目录"
+          />
+        </Form>
+      </Modal>
 
       {/* 发送邮件弹窗 */}
       <Modal
