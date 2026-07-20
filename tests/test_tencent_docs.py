@@ -55,6 +55,35 @@ class TencentDocsServiceTests(TestCase):
         with patch.object(tencent_docs, "get_settings", return_value=settings):
             self.assertEqual(tencent_docs._ensure_access_token(), settings)
 
+    def test_save_configuration_updates_manual_token_without_exposing_it(self) -> None:
+        settings = {
+            "client_id": "old-client-id",
+            "access_token": "old-token",
+            "open_id": "old-open-id",
+            "refresh_token": "old-refresh-token",
+        }
+        with (
+            patch.object(tencent_docs, "get_settings", return_value=settings),
+            patch.object(tencent_docs, "_save_settings") as save_settings,
+        ):
+            public_settings = tencent_docs.save_configuration(
+                {
+                    "client_id": "client-id",
+                    "access_token": "new-token",
+                    "open_id": "new-open-id",
+                    "token_expires_at": "2026-08-09 05:06:07",
+                    "target_document_url": "https://docs.qq.com/sheet/DRGRZS3pnY3RScFhM?tab=BB08J2",
+                }
+            )
+
+        saved_settings = save_settings.call_args.args[0]
+        self.assertEqual(saved_settings["access_token"], "new-token")
+        self.assertEqual(saved_settings["open_id"], "new-open-id")
+        self.assertEqual(saved_settings["token_expires_at"], "2026-08-09T05:06:07")
+        self.assertNotIn("refresh_token", saved_settings)
+        self.assertTrue(public_settings["authorized"])
+        self.assertNotIn("access_token", public_settings)
+
     def test_import_document_uploads_to_cos_and_waits_for_online_document(self) -> None:
         encoded_id, normalized_url = tencent_docs._parse_target_document_url(
             "https://docs.qq.com/sheet/DRGRZS3pnY3RScFhM?tab=BB08J2"

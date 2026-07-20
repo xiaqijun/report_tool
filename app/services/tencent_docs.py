@@ -63,16 +63,27 @@ def get_public_settings() -> dict[str, object]:
 
 def save_configuration(payload: dict[str, object]) -> dict[str, object]:
     settings = get_settings()
-    for key in ("client_id", "redirect_uri", "target_document_url"):
+    for key in ("client_id", "redirect_uri", "target_document_url", "token_expires_at"):
         if key in payload:
             value = str(payload.get(key, "") or "").strip()
             if key == "target_document_url" and value:
                 _encoded_id, value = _parse_target_document_url(value)
+            if key == "token_expires_at" and value:
+                try:
+                    expires_at = datetime.fromisoformat(value)
+                except ValueError as error:
+                    raise ValueError("令牌有效期格式应为 YYYY-MM-DD HH:MM:SS。") from error
+                if expires_at.tzinfo is not None:
+                    raise ValueError("令牌有效期请填写本地时间，不要包含时区。")
+                value = expires_at.isoformat(timespec="seconds")
             settings[key] = value
 
-    client_secret = str(payload.get("client_secret", "") or "").strip()
-    if client_secret:
-        settings["client_secret"] = client_secret
+    for key in ("client_secret", "access_token", "open_id"):
+        value = str(payload.get(key, "") or "").strip()
+        if value:
+            settings[key] = value
+            if key == "access_token":
+                settings.pop("refresh_token", None)
 
     _save_settings(settings)
     return get_public_settings()

@@ -28,8 +28,9 @@ class ChangePasswordRequest(BaseModel):
 
 class TencentDocsSettingsRequest(BaseModel):
     client_id: str = ""
-    client_secret: str = ""
-    redirect_uri: str = ""
+    access_token: str = ""
+    open_id: str = ""
+    token_expires_at: str = ""
     target_document_url: str = ""
 
 

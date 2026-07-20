@@ -87,15 +87,6 @@ export default function HistoryPage() {
     }
   }
 
-  const handleTencentDocsAuthorize = () => {
-    if (!tencentDocsSettings?.client_id || !tencentDocsSettings?.has_client_secret || !tencentDocsSettings?.redirect_uri) {
-      Toast.warning('请先完成腾讯文档应用配置')
-      setTencentDocsModalVisible(true)
-      return
-    }
-    window.location.href = '/api/tencent-docs/authorize'
-  }
-
   const handleTencentDocsSync = async (batchCode: string) => {
     if (!tencentDocsSettings?.authorized) {
       Toast.warning('请先完成腾讯文档授权')
@@ -280,11 +271,6 @@ export default function HistoryPage() {
     },
   ]
 
-  const hasTencentDocsOAuthConfiguration = Boolean(
-    tencentDocsSettings?.client_id &&
-      tencentDocsSettings?.has_client_secret &&
-      tencentDocsSettings?.redirect_uri,
-  )
   const tencentDocsTokenExpiresAt = String(tencentDocsSettings?.token_expires_at || '')
     .replace('T', ' ')
     .slice(0, 16)
@@ -293,28 +279,13 @@ export default function HistoryPage() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <Text>
-            腾讯文档：
-            {tencentDocsSettings?.authorized
-              ? hasTencentDocsOAuthConfiguration
-                ? '已授权（OAuth）'
-                : '已授权（手工令牌）'
-              : '未授权'}
-          </Text>
-          <Button onClick={() => setTencentDocsModalVisible(true)}>配置</Button>
+          <Text>腾讯文档：{tencentDocsSettings?.authorized ? '已配置' : '未配置'}</Text>
+          <Button onClick={() => setTencentDocsModalVisible(true)}>手工令牌配置</Button>
           {tencentDocsSettings?.target_document_url && (
             <Button onClick={() => window.open(tencentDocsSettings.target_document_url, '_blank')}>打开目标文档</Button>
           )}
-          {hasTencentDocsOAuthConfiguration ? (
-            <Button onClick={handleTencentDocsAuthorize}>
-              {tencentDocsSettings?.authorized ? '重新授权' : '授权'}
-            </Button>
-          ) : (
-            <Text type="tertiary">
-              {tencentDocsSettings?.authorized
-                ? `手工令牌${tencentDocsTokenExpiresAt ? ` · 有效至 ${tencentDocsTokenExpiresAt}` : ''}`
-                : '请联系管理员配置手工令牌'}
-            </Text>
+          {tencentDocsTokenExpiresAt && (
+            <Text type="tertiary">有效至 {tencentDocsTokenExpiresAt}</Text>
           )}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -343,29 +314,37 @@ export default function HistoryPage() {
       />
 
       <Modal
-        title="腾讯文档开放 API 配置"
+        title="腾讯文档手工令牌配置"
         visible={tencentDocsModalVisible}
         onOk={() => tencentDocsFormApi?.submitForm()}
         onCancel={() => setTencentDocsModalVisible(false)}
         width={640}
       >
         <Form
-          initValues={{ ...tencentDocsSettings, client_secret: '' }}
+          initValues={{ ...tencentDocsSettings, access_token: '', open_id: '' }}
           onSubmit={handleSaveTencentDocsSettings}
           getFormApi={(formApi) => setTencentDocsFormApi(formApi)}
         >
           <Form.Input field="client_id" label="Client ID" rules={[{ required: true, message: '请输入 Client ID' }]} />
           <Form.Input
-            field="client_secret"
-            label="Client Secret"
+            field="access_token"
+            label="Access Token"
             type="password"
-            placeholder={tencentDocsSettings?.has_client_secret ? '已保存，留空表示不修改' : '请输入 Client Secret'}
+            placeholder={tencentDocsSettings?.authorized ? '已保存，留空不修改' : '请输入 Access Token'}
+            rules={[{ required: !tencentDocsSettings?.authorized, message: '请输入 Access Token' }]}
           />
           <Form.Input
-            field="redirect_uri"
-            label="OAuth 回调地址"
-            placeholder="https://你的域名/api/tencent-docs/callback"
-            rules={[{ required: true, message: '请输入 HTTPS 回调地址' }]}
+            field="open_id"
+            label="Open ID"
+            type="password"
+            placeholder={tencentDocsSettings?.authorized ? '已保存，留空不修改' : '请输入 Open ID'}
+            rules={[{ required: !tencentDocsSettings?.authorized, message: '请输入 Open ID' }]}
+          />
+          <Form.Input
+            field="token_expires_at"
+            label="令牌有效期"
+            placeholder="YYYY-MM-DD HH:MM:SS"
+            rules={[{ required: true, message: '请输入令牌有效期' }]}
           />
           <Form.Input
             field="target_document_url"
