@@ -280,18 +280,42 @@ export default function HistoryPage() {
     },
   ]
 
+  const hasTencentDocsOAuthConfiguration = Boolean(
+    tencentDocsSettings?.client_id &&
+      tencentDocsSettings?.has_client_secret &&
+      tencentDocsSettings?.redirect_uri,
+  )
+  const tencentDocsTokenExpiresAt = String(tencentDocsSettings?.token_expires_at || '')
+    .replace('T', ' ')
+    .slice(0, 16)
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <Text>腾讯文档：{tencentDocsSettings?.authorized ? '已授权' : '未授权'}</Text>
+          <Text>
+            腾讯文档：
+            {tencentDocsSettings?.authorized
+              ? hasTencentDocsOAuthConfiguration
+                ? '已授权（OAuth）'
+                : '已授权（手工令牌）'
+              : '未授权'}
+          </Text>
           <Button onClick={() => setTencentDocsModalVisible(true)}>配置</Button>
           {tencentDocsSettings?.target_document_url && (
             <Button onClick={() => window.open(tencentDocsSettings.target_document_url, '_blank')}>打开目标文档</Button>
           )}
-          <Button onClick={handleTencentDocsAuthorize}>
-            {tencentDocsSettings?.authorized ? '重新授权' : '授权'}
-          </Button>
+          {hasTencentDocsOAuthConfiguration ? (
+            <Button onClick={handleTencentDocsAuthorize}>
+              {tencentDocsSettings?.authorized ? '重新授权' : '授权'}
+            </Button>
+          ) : (
+            <Text type="tertiary">
+              {tencentDocsSettings?.authorized
+                ? `手工令牌${tencentDocsTokenExpiresAt ? ` · 有效至 ${tencentDocsTokenExpiresAt}` : ''}`
+                : '请联系管理员配置手工令牌'}
+            </Text>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <Input
