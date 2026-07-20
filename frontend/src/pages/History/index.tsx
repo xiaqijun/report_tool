@@ -101,10 +101,15 @@ export default function HistoryPage() {
       Toast.warning('请先完成腾讯文档授权')
       return
     }
+    if (!tencentDocsSettings?.target_document_url) {
+      Toast.warning('请先配置目标腾讯表格链接')
+      setTencentDocsModalVisible(true)
+      return
+    }
     setSyncingBatch(batchCode)
     try {
       await api.post(`/api/history/${batchCode}/tencent-docs/sync`)
-      Toast.success('三个报表已同步到腾讯文档')
+      Toast.success('三个报表已覆盖写入目标腾讯表格')
       await fetchData(pagination.current, searchQuery)
     } catch (error: any) {
       Toast.error(error.response?.data?.detail || '同步腾讯文档失败')
@@ -220,7 +225,7 @@ export default function HistoryPage() {
               loading={syncingBatch === record.batch_code}
               onClick={() => handleTencentDocsSync(record.batch_code)}
             >
-              同步三个报表
+              同步到目标文档
             </Button>
           )
         }
@@ -231,6 +236,14 @@ export default function HistoryPage() {
                 {label}
               </Button>
             ))}
+            <Button
+              size="small"
+              type="secondary"
+              loading={syncingBatch === record.batch_code}
+              onClick={() => handleTencentDocsSync(record.batch_code)}
+            >
+              重新同步
+            </Button>
           </div>
         )
       },
@@ -273,6 +286,9 @@ export default function HistoryPage() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <Text>腾讯文档：{tencentDocsSettings?.authorized ? '已授权' : '未授权'}</Text>
           <Button onClick={() => setTencentDocsModalVisible(true)}>配置</Button>
+          {tencentDocsSettings?.target_document_url && (
+            <Button onClick={() => window.open(tencentDocsSettings.target_document_url, '_blank')}>打开目标文档</Button>
+          )}
           <Button onClick={handleTencentDocsAuthorize}>
             {tencentDocsSettings?.authorized ? '重新授权' : '授权'}
           </Button>
@@ -328,9 +344,10 @@ export default function HistoryPage() {
             rules={[{ required: true, message: '请输入 HTTPS 回调地址' }]}
           />
           <Form.Input
-            field="parent_folder_id"
-            label="目标文件夹 ID（可选）"
-            placeholder="留空则同步到腾讯文档根目录"
+            field="target_document_url"
+            label="目标腾讯表格链接"
+            placeholder="https://docs.qq.com/sheet/...?tab=..."
+            rules={[{ required: true, message: '请输入目标腾讯表格链接' }]}
           />
         </Form>
       </Modal>

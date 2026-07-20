@@ -1,9 +1,10 @@
-import hashlib
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
+
+from openpyxl import Workbook
 
 from app.services import tencent_docs
 
@@ -32,14 +33,14 @@ class TencentDocsServiceTests(TestCase):
             return_value={
                 "client_id": "client-id",
                 "client_secret": "secret",
-                "parent_folder_id": "folder-id",
+                "target_document_url": "https://docs.qq.com/sheet/document-id",
                 "access_token": "token",
                 "open_id": "open-id",
             },
         ):
             settings = tencent_docs.get_public_settings()
 
-        self.assertEqual(settings["parent_folder_id"], "folder-id")
+        self.assertEqual(settings["target_document_url"], "https://docs.qq.com/sheet/document-id")
         self.assertTrue(settings["has_client_secret"])
         self.assertTrue(settings["authorized"])
         self.assertNotIn("client_secret", settings)
@@ -55,127 +56,86 @@ class TencentDocsServiceTests(TestCase):
             self.assertEqual(tencent_docs._ensure_access_token(), settings)
 
     def test_import_document_uploads_to_cos_and_waits_for_online_document(self) -> None:
-        content = b"xlsx-content"
-        expected_md5 = hashlib.md5(content).hexdigest()
-        put_response = MagicMock()
-        headers = {
-            "Access-Token": "access-token",
-            "Client-Id": "client-id",
-            "Open-Id": "open-id",
-        }
+        encoded_id, normalized_url = tencent_docs._parse_target_document_url(
+            "https://docs.qq.com/sheet/DRGRZS3pnY3RScFhM?tab=BB08J2"
+        )
+
+        self.assertEqual(encoded_id, "DRGRZS3pnY3RScFhM")
+        self.assertEqual(normalized_url, "https://docs.qq.com/sheet/DRGRZS3pnY3RScFhM")
+
+    def test_read_detail_sheet_values_skips_summary_sheet(self) -> None:
         with TemporaryDirectory() as temp_dir:
             file_path = Path(temp_dir) / "report.xlsx"
-            file_path.write_bytes(content)
-            with (
-                patch.object(
-                    tencent_docs,
-                    "_request_json",
-                    side_effect=[
-                        {
-                            "data": {
-                                "COSPutURL": "https://docs-import-export.cos.ap-guangzhou.myqcloud.com/report.xlsx?signature=1",
-                                "COSFileKey": "temp/report.xlsx",
-                                "CustomHeader": {
-                                    "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                    "x-cos-acl": "default",
-                                },
-                            }
-                        },
-                        {"data": {"progressQueryID": "progress-id"}},
-                        {
-                            "data": {
-                                "ID": "file-id",
-                                "title": "report",
-                                "url": "https://docs.qq.com/sheet/report-id",
-                                "progress": 100,
-                            }
-                        },
-                    ],
-                ) as request_json,
-                patch.object(tencent_docs.requests, "put", return_value=put_response) as put_file,
-            ):
-                result = tencent_docs._import_document(
-                    file_path,
-                    {"parent_folder_id": "folder-id"},
-                    headers,
-                )
+            workbook = Workbook()
+            summary = workbook.active
+            summary.title = "汇总"
+            summary.append(["负责人", "服务器ID计数"])
+            detail = workbook.create_sheet("服务器明细")
+            detail.append(["服务器ID", "是否为容器节点"])
+            detail.append(["server-1", "是"])
+            workbook.save(file_path)
 
-        self.assertEqual(result["url"], "https://docs.qq.com/sheet/report-id")
-        self.assertEqual(request_json.call_args_list[0].args, ("POST", "/openapi/drive/v2/files/upload"))
-        self.assertEqual(request_json.call_args_list[0].kwargs["data"]["fileMD5"], expected_md5)
-        self.assertEqual(request_json.call_args_list[1].kwargs["data"]["parentfolderID"], "folder-id")
-        self.assertEqual(
-            request_json.call_args_list[2].kwargs["params"],
-            {"progressQueryID": "progress-id"},
-        )
-        put_file.assert_called_once()
-        put_response.raise_for_status.assert_called_once()
+            values = tencent_docs._read_detail_sheet_values(file_path)
+
+        self.assertEqual(values, [["服务器ID", "是否为容器节点"], ["server-1", "是"]])
+
+    def test_replace_sheet_values_writes_new_data_then_clears_stale_cells(self) -> None:
+        with patch.object(tencent_docs, "_request_json", return_value={"ret": 0}) as request_json:
+            tencent_docs._replace_sheet_values(
+                "book-id",
+                {"sheetID": "sheet-id", "rowCount": 10, "columnCount": 3},
+                [["a", "b"], ["1", "2"]],
+                {"Access-Token": "token"},
+            )
+
+        self.assertEqual(request_json.call_args_list[0].args, ("PUT", "/openapi/sheetbook/v2/book-id/values/sheet-id!A1:B2"))
+        self.assertEqual(request_json.call_args_list[0].kwargs["json_body"]["values"], [["a", "b"], ["1", "2"]])
+        self.assertEqual(request_json.call_args_list[1].args[0], "POST")
+        self.assertIn("sheet-id!A3:C10:clear", request_json.call_args_list[1].args[1])
+        self.assertIn("sheet-id!C1:C2:clear", request_json.call_args_list[2].args[1])
 
     def test_sync_history_documents_uploads_all_three_reports_and_saves_links(self) -> None:
         with TemporaryDirectory() as temp_dir:
             paths = [Path(temp_dir) / f"report-{index}.xlsx" for index in range(3)]
             for path in paths:
-                path.write_bytes(b"content")
+                path.write_bytes(b"placeholder")
             history = {
                 "batch_code": "batch-1",
                 "online_unprotected_path": str(paths[0]),
                 "agent_missing_path": str(paths[1]),
                 "protection_interrupted_path": str(paths[2]),
-                "tencent_online_unprotected_url": "",
-                "tencent_agent_missing_url": "",
-                "tencent_protection_interrupted_url": "",
+            }
+            settings = {
+                "access_token": "token",
+                "client_id": "client",
+                "open_id": "open",
+                "target_document_url": "https://docs.qq.com/sheet/document-id?tab=sheet-missing",
+            }
+            sheets = {
+                "未添加防护配额信息": {"sheetID": "sheet-online", "rowCount": 1, "columnCount": 14},
+                "未安装Agent信息": {"sheetID": "sheet-missing", "rowCount": 1, "columnCount": 14},
+                "Agent防护中断信息": {"sheetID": "sheet-interrupted", "rowCount": 1, "columnCount": 14},
             }
             with (
                 patch.object(tencent_docs.db, "get_result_history", return_value=history),
-                patch.object(
-                    tencent_docs,
-                    "_ensure_access_token",
-                    return_value={"access_token": "token", "client_id": "client", "open_id": "open"},
-                ),
-                patch.object(
-                    tencent_docs,
-                    "_import_document",
-                    side_effect=[
-                        {"url": "https://docs.qq.com/sheet/online"},
-                        {"url": "https://docs.qq.com/sheet/missing"},
-                        {"url": "https://docs.qq.com/sheet/interrupted"},
-                    ],
-                ) as import_document,
+                patch.object(tencent_docs, "_ensure_access_token", return_value=settings),
+                patch.object(tencent_docs, "_convert_document_id", return_value="book-id"),
+                patch.object(tencent_docs, "_get_sheets_by_title", return_value=sheets),
+                patch.object(tencent_docs, "_read_detail_sheet_values", return_value=[["header"], ["value"]]),
+                patch.object(tencent_docs, "_replace_sheet_values") as replace_sheet,
                 patch.object(tencent_docs.db, "update_result_history_tencent_docs") as save_links,
             ):
                 result = tencent_docs.sync_history_documents("batch-1")
 
-        self.assertEqual(import_document.call_count, 3)
+        self.assertEqual(replace_sheet.call_count, 3)
         self.assertEqual(result["count"], 3)
         save_links.assert_called_once_with(
             "batch-1",
-            "https://docs.qq.com/sheet/online",
-            "https://docs.qq.com/sheet/missing",
-            "https://docs.qq.com/sheet/interrupted",
+            "https://docs.qq.com/sheet/document-id?tab=sheet-online",
+            "https://docs.qq.com/sheet/document-id?tab=sheet-missing",
+            "https://docs.qq.com/sheet/document-id?tab=sheet-interrupted",
         )
 
-    def test_sync_history_documents_reuses_existing_links(self) -> None:
-        history = {
-            "batch_code": "batch-1",
-            "tencent_online_unprotected_url": "https://docs.qq.com/sheet/online",
-            "tencent_agent_missing_url": "https://docs.qq.com/sheet/missing",
-            "tencent_protection_interrupted_url": "https://docs.qq.com/sheet/interrupted",
-        }
-        with (
-            patch.object(tencent_docs.db, "get_result_history", return_value=history),
-            patch.object(
-                tencent_docs,
-                "_ensure_access_token",
-                return_value={"access_token": "token", "client_id": "client", "open_id": "open"},
-            ),
-            patch.object(tencent_docs, "_import_document") as import_document,
-            patch.object(tencent_docs.db, "update_result_history_tencent_docs"),
-        ):
-            result = tencent_docs.sync_history_documents("batch-1")
-
-        import_document.assert_not_called()
-        self.assertEqual(result["count"], 3)
-
     def test_rejects_non_tencent_cos_upload_url(self) -> None:
-        with self.assertRaisesRegex(ValueError, "不可信"):
-            tencent_docs._validate_cos_put_url("https://example.com/upload")
+        with self.assertRaisesRegex(ValueError, "在线表格"):
+            tencent_docs._parse_target_document_url("https://docs.qq.com/doc/document-id")

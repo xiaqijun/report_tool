@@ -30,7 +30,7 @@ class TencentDocsSettingsRequest(BaseModel):
     client_id: str = ""
     client_secret: str = ""
     redirect_uri: str = ""
-    parent_folder_id: str = ""
+    target_document_url: str = ""
 
 
 @router.post("/login")
@@ -651,7 +651,7 @@ async def api_tencent_docs_callback(
 
 @router.post("/history/{batch_code}/tencent-docs/sync")
 async def api_tencent_docs_sync(request: Request, batch_code: str):
-    """Upload the three generated files in a history record to Tencent Docs."""
+    """Replace the three target sheets with files from a history record."""
     user = require_login(request)
     if not isinstance(user, dict):
         raise HTTPException(status_code=401, detail="未登录")
