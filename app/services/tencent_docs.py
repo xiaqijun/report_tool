@@ -2,6 +2,7 @@ import json
 from datetime import date, datetime, time as time_value, timedelta
 from pathlib import Path
 from urllib.parse import urlencode, urlparse
+from uuid import uuid4
 
 import requests
 from openpyxl import load_workbook
@@ -137,8 +138,8 @@ def sync_history_documents(batch_code: str) -> dict[str, object]:
         pending_updates.append((result_key, sheet_info, values))
 
     for result_key, sheet_info, values in pending_updates:
-        sheet_id = str(sheet_info["sheetID"])
-        _replace_sheet_values(book_id, sheet_info, values, headers)
+        updated_sheet_info = _replace_sheet_values(book_id, sheet_info, values, headers)
+        sheet_id = str(updated_sheet_info["sheetID"])
         links[result_key] = f"{normalized_url}?tab={sheet_id}"
 
     db.update_result_history_tencent_docs(
@@ -222,26 +223,19 @@ def _replace_sheet_values(
     sheet_info: dict[str, object],
     values: list[list[str]],
     headers: dict[str, str],
-) -> None:
+) -> dict[str, object]:
     sheet_id = str(sheet_info["sheetID"])
     existing_rows = int(sheet_info.get("rowCount", 0) or 0)
     existing_columns = int(sheet_info.get("columnCount", 0) or 0)
     column_count = max(len(row) for row in values)
-    rows_per_request = max(1, min(MAX_RANGE_ROWS, MAX_RANGE_CELLS // column_count))
-    end_column = _column_name(column_count)
-    for offset in range(0, len(values), rows_per_request):
-        chunk = values[offset : offset + rows_per_request]
-        start_row = offset + 1
-        end_row = offset + len(chunk)
-        cell_range = f"{sheet_id}!A{start_row}:{end_column}{end_row}"
-        _request_json(
-            "PUT",
-            f"/openapi/sheetbook/v2/{book_id}/values/{cell_range}",
-            headers=headers,
-            json_body={"values": chunk},
-        )
-
     row_count = len(values)
+    if (
+        row_count > existing_rows or column_count > existing_columns
+    ) and not _sheet_range_exists(book_id, sheet_id, row_count, column_count, headers):
+        return _rebuild_sheet(book_id, sheet_info, values, headers)
+
+    _write_sheet_values(book_id, sheet_id, values, headers)
+
     if existing_rows > row_count:
         _clear_sheet_range(
             book_id,
@@ -262,6 +256,143 @@ def _replace_sheet_values(
             existing_columns,
             headers,
         )
+    return sheet_info
+
+
+def _write_sheet_values(
+    book_id: str,
+    sheet_id: str,
+    values: list[list[str]],
+    headers: dict[str, str],
+) -> None:
+    column_count = max(len(row) for row in values)
+    rows_per_request = max(1, min(MAX_RANGE_ROWS, MAX_RANGE_CELLS // column_count))
+    end_column = _column_name(column_count)
+    for offset in range(0, len(values), rows_per_request):
+        chunk = values[offset : offset + rows_per_request]
+        start_row = offset + 1
+        end_row = offset + len(chunk)
+        cell_range = f"{sheet_id}!A{start_row}:{end_column}{end_row}"
+        _request_json(
+            "PUT",
+            f"/openapi/sheetbook/v2/{book_id}/values/{cell_range}",
+            headers=headers,
+            json_body={"values": chunk},
+        )
+
+
+
+def _sheet_range_exists(
+    book_id: str,
+    sheet_id: str,
+    row_count: int,
+    column_count: int,
+    headers: dict[str, str],
+) -> bool:
+    end_column = _column_name(column_count)
+    try:
+        _request_json(
+            "GET",
+            f"/openapi/spreadsheet/v3/files/{book_id}/{sheet_id}/A{row_count}:{end_column}{row_count}",
+            headers=headers,
+        )
+        return True
+    except ValueError as error:
+        if "range" in str(error).lower() and "invalid" in str(error).lower():
+            return False
+        raise
+
+
+def _rebuild_sheet(
+    book_id: str,
+    sheet_info: dict[str, object],
+    values: list[list[str]],
+    headers: dict[str, str],
+) -> dict[str, object]:
+    title = str(sheet_info.get("title", "") or "").strip()
+    old_sheet_id = str(sheet_info["sheetID"])
+    row_count = len(values)
+    column_count = max(len(row) for row in values)
+    if not title:
+        raise ValueError("腾讯表格工作表缺少标题，无法安全扩容。")
+    if row_count * column_count > MAX_RANGE_CELLS or column_count > MAX_CLEAR_COLUMNS:
+        raise ValueError("目标工作表需要扩容，但报表超过腾讯表格单工作表创建限制。")
+
+    suffix = f"_同步临时_{uuid4().hex[:6]}"
+    temporary_title = f"{title[: max(1, 31 - len(suffix))]}{suffix}"
+    temporary_sheet = _add_sheet(book_id, temporary_title, row_count, column_count, headers)
+    temporary_sheet_id = str(temporary_sheet["sheetID"])
+    try:
+        _write_sheet_values(book_id, temporary_sheet_id, values, headers)
+    except Exception:
+        _delete_sheet(book_id, temporary_sheet_id, headers)
+        raise
+
+    _delete_sheet(book_id, old_sheet_id, headers)
+    try:
+        replacement_sheet = _add_sheet(book_id, title, row_count, column_count, headers)
+        _write_sheet_values(book_id, str(replacement_sheet["sheetID"]), values, headers)
+    except Exception as error:
+        raise ValueError(
+            f"目标工作表扩容未完成，数据已保留在临时工作表“{temporary_title}”：{error}"
+        ) from error
+
+    try:
+        _delete_sheet(book_id, temporary_sheet_id, headers)
+    except Exception as error:
+        raise ValueError(
+            f"目标工作表已更新，但临时工作表“{temporary_title}”清理失败：{error}"
+        ) from error
+    return replacement_sheet
+
+
+def _add_sheet(
+    book_id: str,
+    title: str,
+    row_count: int,
+    column_count: int,
+    headers: dict[str, str],
+) -> dict[str, object]:
+    response = _request_json(
+        "POST",
+        f"/openapi/spreadsheet/v3/files/{book_id}/batchUpdate",
+        headers=headers,
+        json_body={
+            "requests": [
+                {
+                    "addSheetRequest": {
+                        "title": title,
+                        "rowCount": row_count,
+                        "columnCount": column_count,
+                    }
+                }
+            ]
+        },
+    )
+    responses = _unwrap_data(response).get("responses", [])
+    if not isinstance(responses, list) or not responses:
+        raise ValueError("腾讯表格新增工作表响应缺少 responses。")
+    first_response = responses[0] if isinstance(responses[0], dict) else {}
+    add_response = first_response.get("addSheetResponse", {})
+    properties = add_response.get("properties", {}) if isinstance(add_response, dict) else {}
+    sheet_id = str(properties.get("sheetId", "") or "") if isinstance(properties, dict) else ""
+    if not sheet_id:
+        raise ValueError("腾讯表格新增工作表响应缺少 sheetId。")
+    return {
+        "sheetID": sheet_id,
+        "title": str(properties.get("title", title) or title),
+        "rowCount": row_count,
+        "columnCount": column_count,
+    }
+
+
+def _delete_sheet(book_id: str, sheet_id: str, headers: dict[str, str]) -> None:
+    _request_json(
+        "POST",
+        f"/openapi/spreadsheet/v3/files/{book_id}/batchUpdate",
+        headers=headers,
+        json_body={"requests": [{"deleteSheetRequest": {"sheetId": sheet_id}}]},
+    )
 
 
 def _clear_sheet_range(

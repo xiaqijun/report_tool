@@ -94,6 +94,48 @@ class TencentDocsServiceTests(TestCase):
         self.assertIn("sheet-id!A3:C10:clear", request_json.call_args_list[1].args[1])
         self.assertIn("sheet-id!C1:C2:clear", request_json.call_args_list[2].args[1])
 
+    def test_replace_sheet_values_rebuilds_sheet_when_target_range_is_too_small(self) -> None:
+        replacement = {"sheetID": "replacement-id", "title": "目标", "rowCount": 2, "columnCount": 2}
+        with (
+            patch.object(tencent_docs, "_sheet_range_exists", return_value=False),
+            patch.object(tencent_docs, "_rebuild_sheet", return_value=replacement) as rebuild_sheet,
+        ):
+            result = tencent_docs._replace_sheet_values(
+                "book-id",
+                {"sheetID": "old-id", "title": "目标", "rowCount": 1, "columnCount": 2},
+                [["a", "b"], ["1", "2"]],
+                {"Access-Token": "token"},
+            )
+
+        self.assertEqual(result, replacement)
+        rebuild_sheet.assert_called_once()
+
+    def test_rebuild_sheet_keeps_temporary_copy_until_replacement_is_written(self) -> None:
+        with (
+            patch.object(
+                tencent_docs,
+                "_add_sheet",
+                side_effect=[
+                    {"sheetID": "temporary-id", "title": "临时", "rowCount": 2, "columnCount": 2},
+                    {"sheetID": "replacement-id", "title": "目标", "rowCount": 2, "columnCount": 2},
+                ],
+            ) as add_sheet,
+            patch.object(tencent_docs, "_write_sheet_values") as write_values,
+            patch.object(tencent_docs, "_delete_sheet") as delete_sheet,
+        ):
+            result = tencent_docs._rebuild_sheet(
+                "book-id",
+                {"sheetID": "old-id", "title": "目标", "rowCount": 1, "columnCount": 2},
+                [["a", "b"], ["1", "2"]],
+                {"Access-Token": "token"},
+            )
+
+        self.assertEqual(result["sheetID"], "replacement-id")
+        self.assertEqual(add_sheet.call_count, 2)
+        self.assertEqual(write_values.call_args_list[0].args[1], "temporary-id")
+        self.assertEqual(write_values.call_args_list[1].args[1], "replacement-id")
+        self.assertEqual([call.args[1] for call in delete_sheet.call_args_list], ["old-id", "temporary-id"])
+
     def test_sync_history_documents_uploads_all_three_reports_and_saves_links(self) -> None:
         with TemporaryDirectory() as temp_dir:
             paths = [Path(temp_dir) / f"report-{index}.xlsx" for index in range(3)]
@@ -122,7 +164,15 @@ class TencentDocsServiceTests(TestCase):
                 patch.object(tencent_docs, "_convert_document_id", return_value="book-id"),
                 patch.object(tencent_docs, "_get_sheets_by_title", return_value=sheets),
                 patch.object(tencent_docs, "_read_detail_sheet_values", return_value=[["header"], ["value"]]),
-                patch.object(tencent_docs, "_replace_sheet_values") as replace_sheet,
+                patch.object(
+                    tencent_docs,
+                    "_replace_sheet_values",
+                    side_effect=[
+                        sheets["未添加防护配额信息"],
+                        sheets["未安装Agent信息"],
+                        sheets["Agent防护中断信息"],
+                    ],
+                ) as replace_sheet,
                 patch.object(tencent_docs.db, "update_result_history_tencent_docs") as save_links,
             ):
                 result = tencent_docs.sync_history_documents("batch-1")
