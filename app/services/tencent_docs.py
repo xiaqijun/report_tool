@@ -227,9 +227,14 @@ def _validate_cos_put_url(value: str) -> None:
 
 
 def _ensure_access_token() -> dict[str, object]:
-    settings = _require_configuration()
-    if not settings.get("access_token") or not settings.get("open_id"):
-        raise ValueError("请先完成腾讯文档 OAuth 授权。")
+    settings = get_settings()
+    missing = [
+        key
+        for key in ("client_id", "access_token", "open_id")
+        if not str(settings.get(key, "") or "").strip()
+    ]
+    if missing:
+        raise ValueError(f"腾讯文档访问配置不完整：{', '.join(missing)}")
 
     expires_at = str(settings.get("token_expires_at", "") or "")
     if expires_at:

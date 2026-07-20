@@ -45,6 +45,15 @@ class TencentDocsServiceTests(TestCase):
         self.assertNotIn("client_secret", settings)
         self.assertNotIn("access_token", settings)
 
+    def test_manual_access_token_does_not_require_oauth_secret(self) -> None:
+        settings = {
+            "client_id": "client-id",
+            "access_token": "access-token",
+            "open_id": "open-id",
+        }
+        with patch.object(tencent_docs, "get_settings", return_value=settings):
+            self.assertEqual(tencent_docs._ensure_access_token(), settings)
+
     def test_import_document_uploads_to_cos_and_waits_for_online_document(self) -> None:
         content = b"xlsx-content"
         expected_md5 = hashlib.md5(content).hexdigest()
