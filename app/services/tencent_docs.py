@@ -1,3 +1,5 @@
+import base64
+import binascii
 import json
 from datetime import date, datetime, time as time_value, timedelta
 from pathlib import Path
@@ -61,29 +63,39 @@ def get_public_settings() -> dict[str, object]:
     }
 
 
+def _get_access_token_expiration(access_token: str) -> str:
+    try:
+        payload_segment = access_token.split(".")[1]
+        payload_segment += "=" * (-len(payload_segment) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(payload_segment).decode("utf-8"))
+        expires_at_timestamp = float(payload["exp"])
+        if expires_at_timestamp > 10_000_000_000:
+            expires_at_timestamp /= 1000
+        expires_at = datetime.fromtimestamp(expires_at_timestamp)
+    except (IndexError, KeyError, TypeError, ValueError, UnicodeDecodeError, binascii.Error) as error:
+        raise ValueError("无法从 Access Token 获取有效期，请确认令牌格式正确。") from error
+
+    if expires_at <= datetime.now():
+        raise ValueError("Access Token 已过期，请提供新的令牌。")
+    return expires_at.isoformat(timespec="seconds")
+
+
 def save_configuration(payload: dict[str, object]) -> dict[str, object]:
     settings = get_settings()
-    for key in ("client_id", "redirect_uri", "target_document_url", "token_expires_at"):
+    for key in ("client_id", "redirect_uri", "target_document_url"):
         if key in payload:
             value = str(payload.get(key, "") or "").strip()
             if key == "target_document_url" and value:
                 _encoded_id, value = _parse_target_document_url(value)
-            if key == "token_expires_at" and value:
-                try:
-                    expires_at = datetime.fromisoformat(value)
-                except ValueError as error:
-                    raise ValueError("令牌有效期格式应为 YYYY-MM-DD HH:MM:SS。") from error
-                if expires_at.tzinfo is not None:
-                    raise ValueError("令牌有效期请填写本地时间，不要包含时区。")
-                value = expires_at.isoformat(timespec="seconds")
             settings[key] = value
 
     for key in ("client_secret", "access_token", "open_id"):
         value = str(payload.get(key, "") or "").strip()
         if value:
-            settings[key] = value
             if key == "access_token":
+                settings["token_expires_at"] = _get_access_token_expiration(value)
                 settings.pop("refresh_token", None)
+            settings[key] = value
 
     _save_settings(settings)
     return get_public_settings()

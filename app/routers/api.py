@@ -30,7 +30,6 @@ class TencentDocsSettingsRequest(BaseModel):
     client_id: str = ""
     access_token: str = ""
     open_id: str = ""
-    token_expires_at: str = ""
     target_document_url: str = ""
 
 

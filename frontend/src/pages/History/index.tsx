@@ -341,12 +341,6 @@ export default function HistoryPage() {
             rules={[{ required: !tencentDocsSettings?.authorized, message: '请输入 Open ID' }]}
           />
           <Form.Input
-            field="token_expires_at"
-            label="令牌有效期"
-            placeholder="YYYY-MM-DD HH:MM:SS"
-            rules={[{ required: true, message: '请输入令牌有效期' }]}
-          />
-          <Form.Input
             field="target_document_url"
             label="目标腾讯表格链接"
             placeholder="https://docs.qq.com/sheet/...?tab=..."

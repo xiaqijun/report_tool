@@ -1,3 +1,6 @@
+import base64
+import json
+from datetime import datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
@@ -56,6 +59,11 @@ class TencentDocsServiceTests(TestCase):
             self.assertEqual(tencent_docs._ensure_access_token(), settings)
 
     def test_save_configuration_updates_manual_token_without_exposing_it(self) -> None:
+        expires_at_timestamp = int((datetime.now() + timedelta(days=30)).timestamp())
+        encoded_payload = base64.urlsafe_b64encode(
+            json.dumps({"exp": expires_at_timestamp}).encode("utf-8")
+        ).decode("ascii").rstrip("=")
+        access_token = f"header.{encoded_payload}.signature"
         settings = {
             "client_id": "old-client-id",
             "access_token": "old-token",
@@ -69,20 +77,32 @@ class TencentDocsServiceTests(TestCase):
             public_settings = tencent_docs.save_configuration(
                 {
                     "client_id": "client-id",
-                    "access_token": "new-token",
+                    "access_token": access_token,
                     "open_id": "new-open-id",
-                    "token_expires_at": "2026-08-09 05:06:07",
                     "target_document_url": "https://docs.qq.com/sheet/DRGRZS3pnY3RScFhM?tab=BB08J2",
                 }
             )
 
         saved_settings = save_settings.call_args.args[0]
-        self.assertEqual(saved_settings["access_token"], "new-token")
+        self.assertEqual(saved_settings["access_token"], access_token)
         self.assertEqual(saved_settings["open_id"], "new-open-id")
-        self.assertEqual(saved_settings["token_expires_at"], "2026-08-09T05:06:07")
+        self.assertEqual(
+            saved_settings["token_expires_at"],
+            datetime.fromtimestamp(expires_at_timestamp).isoformat(timespec="seconds"),
+        )
         self.assertNotIn("refresh_token", saved_settings)
         self.assertTrue(public_settings["authorized"])
         self.assertNotIn("access_token", public_settings)
+
+    def test_save_configuration_rejects_token_without_expiration(self) -> None:
+        with (
+            patch.object(tencent_docs, "get_settings", return_value={}),
+            patch.object(tencent_docs, "_save_settings") as save_settings,
+            self.assertRaisesRegex(ValueError, "无法从 Access Token 获取有效期"),
+        ):
+            tencent_docs.save_configuration({"access_token": "invalid-token"})
+
+        save_settings.assert_not_called()
 
     def test_import_document_uploads_to_cos_and_waits_for_online_document(self) -> None:
         encoded_id, normalized_url = tencent_docs._parse_target_document_url(
