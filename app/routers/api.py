@@ -383,7 +383,7 @@ async def api_send_daily_report_email(request: Request):
 
     # Get email settings
     email_settings = db.get_email_settings() or {}
-    if not email_settings.get("smtp_host") or not email_settings.get("smtp_from"):
+    if not email_settings.get("smtp_host"):
         raise HTTPException(status_code=400, detail="邮件服务未配置，请先在系统设置中配置SMTP")
 
     from ..services.email_service import send_email
@@ -396,7 +396,8 @@ async def api_send_daily_report_email(request: Request):
         date_display = report_date
 
     if not subject:
-        subject = f"安全运营日报 - {date_display}"
+        subject_template = str(email_settings.get("daily_report_subject") or "").strip()
+        subject = subject_template.replace("{date}", date_display) if subject_template else f"安全运营日报 - {date_display}"
 
     # Read DOCX content as email body
     html_content = _docx_to_html(docx_path)
@@ -415,14 +416,7 @@ h3{{font-size:15px}}
         html_content=html,
         cc_list=cc_list,
         attachments=[{"filename": f"安全运营日报-{report_date}.docx", "path": docx_path}],
-        smtp_config={
-            "host": email_settings.get("smtp_host", ""),
-            "port": int(email_settings.get("smtp_port", 25)),
-            "user": email_settings.get("smtp_user", ""),
-            "password": email_settings.get("smtp_password", ""),
-            "smtp_from": email_settings.get("smtp_from", ""),
-            "use_tls": email_settings.get("use_tls", False),
-        },
+        smtp_config=email_settings,
     )
     return result
 

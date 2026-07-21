@@ -1080,3 +1080,59 @@ class OperatorApiTests(TestCase):
 
         self.assertEqual(response, {"success": True})
         save_ops_personnel.assert_called_once_with(payload, 7)
+
+
+class DailyReportEmailApiTests(TestCase):
+    class _JsonRequest:
+        def __init__(self, payload):
+            self._payload = payload
+
+        async def json(self):
+            return self._payload
+
+    def _run(self, coro):
+        return asyncio.run(coro)
+
+    def _endpoint(self):
+        return next(
+            route.endpoint
+            for route in api_router.router.routes
+            if getattr(route, "path", "") == "/api/daily-report/send-report-email"
+        )
+
+    def test_report_email_reuses_saved_smtp_settings_and_subject(self):
+        settings = {
+            "smtp_host": "smtp.example.com",
+            "smtp_port": 465,
+            "smtp_user": "sender@example.com",
+            "smtp_password": "secret",
+            "smtp_from": "",
+            "use_tls": True,
+            "daily_report_subject": "【安全运营日报】{date}",
+        }
+        payload = {
+            "report_date": "2026-07-21",
+            "to": "first@example.com,second@example.com",
+            "cc": "copy@example.com",
+            "subject": "",
+        }
+        docx_path = Path("daily-report.docx")
+
+        with (
+            patch("app.routers.api.require_login", return_value={"display_name": "Tester"}),
+            patch("app.routers.api.db.get_daily_report_by_date", return_value={"report_date": "2026-07-21"}),
+            patch("app.routers.api.db.list_ops_personnel", return_value=[]),
+            patch("app.routers.api.db.get_email_settings", return_value=settings),
+            patch("app.services.docx_generator.generate_daily_report_docx", return_value=docx_path),
+            patch("app.routers.api._docx_to_html", return_value="<p>日报正文</p>"),
+            patch("app.services.email_service.send_email", return_value={"success": True}) as send_email,
+        ):
+            response = self._run(self._endpoint()(self._JsonRequest(payload)))
+
+        self.assertEqual(response, {"success": True})
+        send_email.assert_called_once()
+        kwargs = send_email.call_args.kwargs
+        self.assertEqual(kwargs["to_list"], ["first@example.com", "second@example.com"])
+        self.assertEqual(kwargs["cc_list"], ["copy@example.com"])
+        self.assertEqual(kwargs["subject"], "【安全运营日报】2026年07月21日")
+        self.assertIs(kwargs["smtp_config"], settings)
