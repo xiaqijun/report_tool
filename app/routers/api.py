@@ -473,8 +473,12 @@ async def api_llm_settings(request: Request):
     if not isinstance(user, dict):
         raise HTTPException(status_code=401, detail="未登录")
 
-    settings = db.get_llm_settings()
-    return {"settings": settings}
+    from ..services.llm_settings import get_effective_llm_settings
+
+    settings = get_effective_llm_settings()
+    api_key_configured = bool(str(settings.get("api_key", "")).strip())
+    public_settings = {**settings, "api_key": ""}
+    return {"settings": public_settings, "api_key_configured": api_key_configured}
 
 
 @router.post("/llm-settings/save")
@@ -484,8 +488,19 @@ async def api_save_llm_settings(request: Request):
     if not isinstance(user, dict):
         raise HTTPException(status_code=401, detail="未登录")
 
+    from ..services.llm_settings import get_effective_llm_settings, normalize_llm_settings
+
     data = await request.json()
-    db.save_llm_settings(data)
+    current_settings = get_effective_llm_settings()
+    api_key = str(data.get("api_key", "")).strip()
+    if not api_key and current_settings.get("source") == "db":
+        api_key = str(current_settings.get("api_key", "")).strip()
+
+    settings = normalize_llm_settings({**data, "api_key": api_key})
+    if settings["enabled"] and not (settings["api_base_url"] and settings["api_key"] and settings["model"]):
+        raise HTTPException(status_code=400, detail="启用大模型时，API 地址、API Key 和模型名称必须配置完整")
+
+    db.save_llm_settings(settings)
     return {"success": True}
 
 
