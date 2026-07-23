@@ -277,7 +277,7 @@ def _compose_hss_detail(report: dict) -> str:
     return (
         f"HSS发生告警{report.get('hss_detail_total', 0)}次，其中致命告警{report.get('hss_detail_fatal', 0)}次，"
         f"高危告警{report.get('hss_detail_high', 0)}次，中危告警{report.get('hss_detail_medium', 0)}次，"
-        f"低危告警{report.get('hss_detail_low', 0)}次，未闭环事件{report.get('hss_unclosed_event_count', 0)}次，"
+        f"低危告警{report.get('hss_detail_low', 0)}次，未闭环事件{report.get('hss_unclosed_event_count', 0)}个，"
         f"{report.get('hss_closed_loop_status', '')}。"
     )
 
@@ -293,7 +293,7 @@ def _compose_secmaster_detail(report: dict) -> str:
         f"SecMaster发生告警{report.get('secmaster_detail_total', 0)}次，其中致命告警{report.get('secmaster_detail_fatal', 0)}次，"
         f"高危告警{report.get('secmaster_detail_high', 0)}次，中危告警{report.get('secmaster_detail_medium', 0)}次，"
         f"低危告警{report.get('secmaster_detail_low', 0)}次，提示告警{report.get('secmaster_detail_info', 0)}次，"
-        f"未闭环事件{report.get('secmaster_unclosed_event_count', 0)}次。"
+        f"未闭环事件{report.get('secmaster_unclosed_event_count', 0)}个。"
     )
 
 
@@ -448,7 +448,7 @@ def _add_section_1(doc: Document, report: dict) -> None:
 
 
 def _summary_unclosed_event_text(count: object) -> str:
-    return f"有{int(count)}起事件未闭环" if int(count) else "无未闭环事件"
+    return f"有{int(count)}个事件未闭环" if int(count) else "无未闭环事件"
 
 
 def _add_section_2(doc: Document, report: dict) -> None:
@@ -537,7 +537,7 @@ def _add_hss_detail(doc: Document, report: dict) -> None:
     low = report.get("hss_detail_low", 0)
     unclosed_count = report.get("hss_unclosed_event_count", 0)
     closed = str(report.get("hss_closed_loop_status", ""))
-    unclosed_count_text = f"，未闭环事件{unclosed_count}次"
+    unclosed_count_text = f"，未闭环事件{unclosed_count}个"
     _add_para(doc,
         f"HSS发生告警{total}次，其中致命告警{fatal}次，高危告警{high}次，"
         f"中危告警{medium}次，低危告警{low}次{unclosed_count_text}，{closed}。"
@@ -563,7 +563,7 @@ def _add_secmaster_detail(doc: Document, report: dict) -> None:
     low = report.get("secmaster_detail_low", 0)
     info = report.get("secmaster_detail_info", 0)
     unclosed_count = report.get("secmaster_unclosed_event_count", 0)
-    unclosed_count_text = f"，未闭环事件{unclosed_count}次"
+    unclosed_count_text = f"，未闭环事件{unclosed_count}个"
     _add_para(doc,
         f"SecMaster发生告警{total}次，其中致命告警{fatal}次，高危告警{high}次，"
         f"中危告警{medium}次，低危告警{low}次，提示告警{info}次{unclosed_count_text}。"

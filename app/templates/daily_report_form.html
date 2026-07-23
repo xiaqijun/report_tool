@@ -59,7 +59,7 @@
                             <td>HSS主机安全</td>
                             <td>-</td>
                             <td>发生告警{{ report.hss_alerts if report else 0 }}次</td>
-                            <td>{% if report and report.hss_unclosed_event_count %}有{{ report.hss_unclosed_event_count }}起事件未闭环{% else %}无未闭环事件{% endif %}</td>
+                            <td>{% if report and report.hss_unclosed_event_count %}有{{ report.hss_unclosed_event_count }}个事件未闭环{% else %}无未闭环事件{% endif %}</td>
                         </tr>
                         <tr>
                             <td>DDoS防护</td>
@@ -71,7 +71,7 @@
                             <td>SecMaster态势感知</td>
                             <td>-</td>
                             <td>检测告警{{ report.secmaster_alerts if report else 0 }}次</td>
-                            <td>{% if report and report.secmaster_unclosed_event_count %}有{{ report.secmaster_unclosed_event_count }}起事件未闭环{% else %}无未闭环事件{% endif %}</td>
+                            <td>{% if report and report.secmaster_unclosed_event_count %}有{{ report.secmaster_unclosed_event_count }}个事件未闭环{% else %}无未闭环事件{% endif %}</td>
                         </tr>
                     </tbody>
                 </table>

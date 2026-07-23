@@ -378,11 +378,14 @@ class DocxGenerationTests(TestCase):
 
             self.assertEqual(table.rows[2].cells[0].paragraphs[0].text, "今日业务运行稳定。")
             self.assertIn("WAF遭受攻击1000次", table.rows[2].cells[0].paragraphs[1].text)
+            self.assertIn("有12个事件未闭环", table.rows[2].cells[0].paragraphs[1].text)
+            self.assertIn("有8个事件未闭环", table.rows[2].cells[0].paragraphs[1].text)
             self.assertIn("趋势平稳。总体态势良好。", table.rows[2].cells[0].paragraphs[2].text)
             self.assertIn("监控时间：2026年5月20日 18:00~2026年5月21日 18:00", table.rows[3].cells[0].paragraphs[0].text)
             self.assertIn("入方向流量峰值15.90Gbps", table.rows[4].cells[0].paragraphs[10].text)
             self.assertIn("入方向95带宽值14.71Gbps", table.rows[4].cells[0].paragraphs[10].text)
-            self.assertIn("未闭环事件12次", table.rows[4].cells[0].paragraphs[13].text)
+            self.assertIn("未闭环事件12个", table.rows[4].cells[0].paragraphs[13].text)
+            self.assertIn("未闭环事件8个", table.rows[4].cells[0].paragraphs[20].text)
             self.assertEqual(table.rows[6].cells[0].paragraphs[0].text, "今日已完成重点巡检。")
             self.assertEqual(table.rows[8].cells[0].paragraphs[0].text, "攻击路径分析暂无异常。")
 
