@@ -273,11 +273,18 @@ class DocxGenerationTests(TestCase):
         first_table = document_root.find(".//w:tbl", namespaces)
         self.assertIsNotNone(first_table)
 
+        table_width = first_table.find("./w:tblPr/w:tblW", namespaces)
+        table_indent = first_table.find("./w:tblPr/w:tblInd", namespaces)
+        table_layout = first_table.find("./w:tblPr/w:tblLayout", namespaces)
         grid_column = first_table.find("./w:tblGrid/w:gridCol", namespaces)
-        first_cell = first_table.find("./w:tr/w:tc", namespaces)
+        outer_cells = first_table.findall("./w:tr/w:tc", namespaces)
+        self.assertIsNotNone(table_width)
+        self.assertIsNotNone(table_indent)
+        self.assertIsNotNone(table_layout)
         self.assertIsNotNone(grid_column)
-        self.assertIsNotNone(first_cell)
+        self.assertTrue(outer_cells)
 
+        first_cell = outer_cells[0]
         banner_anchor = first_cell.find(".//wp:anchor", namespaces)
         self.assertIsNotNone(banner_anchor)
 
@@ -286,8 +293,19 @@ class DocxGenerationTests(TestCase):
         self.assertIsNotNone(layout_extent)
         self.assertIsNotNone(graphic_extent)
 
-        grid_width_emu = int(grid_column.attrib[f"{{{word_namespace}}}w"]) * 635
-        self.assertEqual(int(layout_extent.attrib["cx"]), grid_width_emu)
+        width_attribute = f"{{{word_namespace}}}w"
+        type_attribute = f"{{{word_namespace}}}type"
+        table_width_dxa = int(table_width.attrib[width_attribute])
+        self.assertEqual(table_width.attrib[type_attribute], "dxa")
+        self.assertEqual(table_indent.attrib, {width_attribute: "0", type_attribute: "dxa"})
+        self.assertEqual(table_layout.attrib[type_attribute], "fixed")
+        self.assertEqual(int(grid_column.attrib[width_attribute]), table_width_dxa)
+        for cell in outer_cells:
+            cell_width = cell.find("./w:tcPr/w:tcW", namespaces)
+            self.assertIsNotNone(cell_width)
+            self.assertEqual(int(cell_width.attrib[width_attribute]), table_width_dxa)
+
+        self.assertEqual(int(layout_extent.attrib["cx"]), table_width_dxa * 635)
         self.assertEqual(layout_extent.attrib["cx"], graphic_extent.attrib["cx"])
         self.assertEqual(layout_extent.attrib["cy"], graphic_extent.attrib["cy"])
 
