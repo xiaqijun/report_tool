@@ -4,6 +4,7 @@ import re
 from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
+from xml.etree import ElementTree as ET
 from zipfile import ZipFile
 
 from docx import Document
@@ -254,6 +255,38 @@ class DocxGenerationTests(TestCase):
             self.assertTrue(file_path.exists())
             self.assertEqual(file_path.suffix, ".docx")
             self.assertIn("2026-05-21", file_path.name)
+
+    def test_top_banner_fits_first_table_cell(self):
+        with TemporaryDirectory() as temp_dir:
+            with patch("app.services.docx_generator.EXPORT_DIR", Path(temp_dir)):
+                file_path = generate_daily_report_docx({"report_date": "2026-05-21"}, [])
+
+            with ZipFile(file_path) as docx_zip:
+                document_root = ET.fromstring(docx_zip.read("word/document.xml"))
+
+        namespaces = {
+            "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+            "wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing",
+            "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
+        }
+        word_namespace = namespaces["w"]
+        first_cell = document_root.find(".//w:tbl/w:tr/w:tc", namespaces)
+        self.assertIsNotNone(first_cell)
+
+        cell_width = first_cell.find("./w:tcPr/w:tcW", namespaces)
+        banner_anchor = first_cell.find(".//wp:anchor", namespaces)
+        self.assertIsNotNone(cell_width)
+        self.assertIsNotNone(banner_anchor)
+
+        layout_extent = banner_anchor.find("./wp:extent", namespaces)
+        graphic_extent = banner_anchor.find(".//a:xfrm/a:ext", namespaces)
+        self.assertIsNotNone(layout_extent)
+        self.assertIsNotNone(graphic_extent)
+
+        cell_width_emu = int(cell_width.attrib[f"{{{word_namespace}}}w"]) * 635
+        self.assertLessEqual(int(layout_extent.attrib["cx"]), cell_width_emu)
+        self.assertEqual(layout_extent.attrib["cx"], graphic_extent.attrib["cx"])
+        self.assertEqual(layout_extent.attrib["cy"], graphic_extent.attrib["cy"])
 
     def test_updates_header_title_with_report_date(self):
         report = {
