@@ -470,6 +470,36 @@ class DocxGenerationTests(TestCase):
         self.assertIn("入方向95带宽值14.71Gbps", paragraph_text)
         self.assertNotIn("GbpsGbps", paragraph_text)
 
+    def test_generates_all_configured_operators_beyond_template_capacity(self):
+        report = {
+            "report_date": "2026-05-21",
+            "business_stability": "今日业务运行稳定。",
+        }
+        operators = [
+            {
+                "name": f"运营人员{index}",
+                "phone": f"1380013800{index}",
+                "role": f"角色{index}",
+                "responsibility": "负责安全监控。",
+            }
+            for index in range(1, 8)
+        ]
+
+        with TemporaryDirectory() as temp_dir:
+            with patch("app.services.docx_generator.EXPORT_DIR", Path(temp_dir)):
+                file_path = generate_daily_report_docx(report, operators)
+
+            doc = Document(file_path)
+            operator_table = doc.tables[0].rows[10].cells[0].tables[0]
+
+        self.assertEqual(len(operator_table.rows), 8)
+        for index, operator in enumerate(operators, start=1):
+            row = operator_table.rows[index]
+            self.assertEqual(row.cells[1].text, operator["name"])
+            self.assertEqual(row.cells[2].text, operator["phone"])
+            self.assertEqual(row.cells[3].text, operator["role"])
+        self.assertEqual(operator_table.rows[1].cells[4].text, "负责安全监控。")
+
     def test_waf_qps_caption_is_separate_from_embedded_picture(self):
         doc = Document(DAILY_REPORT_TEMPLATE)
         image_paragraph = doc.tables[0].rows[4].cells[0].paragraphs[5]

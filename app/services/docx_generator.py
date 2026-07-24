@@ -42,6 +42,8 @@ def _render_docx_template(template_path: Path, output_path: Path, context: dict[
             fname = info.filename.replace("\\", "/")
             if fname in xml_files or fname.startswith("word/header") or fname.startswith("word/footer") or fname.startswith("docProps/"):
                 xml_text = data.decode("utf-8", errors="replace")
+                if fname == "word/document.xml":
+                    xml_text = _expand_operator_rows(xml_text, int(context.get("operator_count") or 0))
                 for placeholder, value in replacements.items():
                     xml_text = xml_text.replace(placeholder, value)
                 if report_title:
@@ -50,8 +52,36 @@ def _render_docx_template(template_path: Path, output_path: Path, context: dict[
             target_zip.writestr(info, data)
 
 
+def _expand_operator_rows(xml_text: str, operator_count: int) -> str:
+    if operator_count <= 4:
+        return xml_text
+
+    marker = "{{ operator_4_name }}"
+    marker_index = xml_text.find(marker)
+    if marker_index < 0:
+        raise ValueError("日报模板缺少第 4 个运营人员占位符，无法扩展人员行")
+
+    row_matches = list(re.finditer(r"<w:tr(?:\s|>)", xml_text[:marker_index]))
+    if not row_matches:
+        raise ValueError("日报模板中的运营人员行结构无效")
+
+    row_start = row_matches[-1].start()
+    row_end = xml_text.find("</w:tr>", marker_index)
+    if row_end < 0:
+        raise ValueError("日报模板中的运营人员行未正确结束")
+    row_end += len("</w:tr>")
+
+    row_template = xml_text[row_start:row_end]
+    extra_rows = []
+    for operator_index in range(5, operator_count + 1):
+        row_xml = row_template.replace("operator_4_", f"operator_{operator_index}_")
+        row_xml = re.sub(r' w14:(?:paraId|textId)="[^"]*"', "", row_xml)
+        extra_rows.append(row_xml)
+    return f"{xml_text[:row_end]}{''.join(extra_rows)}{xml_text[row_end:]}"
+
+
 def _build_template_context(report: dict, operators: list[dict]) -> dict[str, object]:
-    normalized_operators = list(operators[:4])
+    normalized_operators = list(operators)
     while len(normalized_operators) < 4:
         normalized_operators.append({})
 
@@ -62,7 +92,7 @@ def _build_template_context(report: dict, operators: list[dict]) -> dict[str, ob
             break
 
     raw_date = str(report.get("report_date", ""))
-    return {
+    context: dict[str, object] = {
         "report_date": raw_date,
         "date_display": _format_date_display(raw_date) if raw_date else "",
         "report_title": _build_report_title(raw_date),
@@ -89,19 +119,13 @@ def _build_template_context(report: dict, operators: list[dict]) -> dict[str, ob
         "legacy_items": str(report.get("legacy_items", "")).strip() or "暂无",
         "operator_group": "运营人员" if any(op for op in operators) else "",
         "operator_shared_responsibility": shared_responsibility,
-        "operator_1_name": str(normalized_operators[0].get("name", "")),
-        "operator_1_phone": str(normalized_operators[0].get("phone", "")),
-        "operator_1_role": str(normalized_operators[0].get("role", "")),
-        "operator_2_name": str(normalized_operators[1].get("name", "")),
-        "operator_2_phone": str(normalized_operators[1].get("phone", "")),
-        "operator_2_role": str(normalized_operators[1].get("role", "")),
-        "operator_3_name": str(normalized_operators[2].get("name", "")),
-        "operator_3_phone": str(normalized_operators[2].get("phone", "")),
-        "operator_3_role": str(normalized_operators[2].get("role", "")),
-        "operator_4_name": str(normalized_operators[3].get("name", "")),
-        "operator_4_phone": str(normalized_operators[3].get("phone", "")),
-        "operator_4_role": str(normalized_operators[3].get("role", "")),
+        "operator_count": len(operators),
     }
+    for index, operator in enumerate(normalized_operators, start=1):
+        context[f"operator_{index}_name"] = str(operator.get("name", ""))
+        context[f"operator_{index}_phone"] = str(operator.get("phone", ""))
+        context[f"operator_{index}_role"] = str(operator.get("role", ""))
+    return context
 
 
 def _set_narrow_margins(doc: Document) -> None:
