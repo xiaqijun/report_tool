@@ -270,12 +270,15 @@ class DocxGenerationTests(TestCase):
             "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
         }
         word_namespace = namespaces["w"]
-        first_cell = document_root.find(".//w:tbl/w:tr/w:tc", namespaces)
+        first_table = document_root.find(".//w:tbl", namespaces)
+        self.assertIsNotNone(first_table)
+
+        grid_column = first_table.find("./w:tblGrid/w:gridCol", namespaces)
+        first_cell = first_table.find("./w:tr/w:tc", namespaces)
+        self.assertIsNotNone(grid_column)
         self.assertIsNotNone(first_cell)
 
-        cell_width = first_cell.find("./w:tcPr/w:tcW", namespaces)
         banner_anchor = first_cell.find(".//wp:anchor", namespaces)
-        self.assertIsNotNone(cell_width)
         self.assertIsNotNone(banner_anchor)
 
         layout_extent = banner_anchor.find("./wp:extent", namespaces)
@@ -283,8 +286,8 @@ class DocxGenerationTests(TestCase):
         self.assertIsNotNone(layout_extent)
         self.assertIsNotNone(graphic_extent)
 
-        cell_width_emu = int(cell_width.attrib[f"{{{word_namespace}}}w"]) * 635
-        self.assertLessEqual(int(layout_extent.attrib["cx"]), cell_width_emu)
+        grid_width_emu = int(grid_column.attrib[f"{{{word_namespace}}}w"]) * 635
+        self.assertEqual(int(layout_extent.attrib["cx"]), grid_width_emu)
         self.assertEqual(layout_extent.attrib["cx"], graphic_extent.attrib["cx"])
         self.assertEqual(layout_extent.attrib["cy"], graphic_extent.attrib["cy"])
 
