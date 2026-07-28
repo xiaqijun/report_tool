@@ -1289,6 +1289,9 @@ class DailyReportEmailApiTests(TestCase):
         self.assertEqual(kwargs["to_list"], ["first@example.com", "second@example.com"])
         self.assertEqual(kwargs["cc_list"], ["copy@example.com"])
         self.assertEqual(kwargs["subject"], "【安全运营日报】2026年07月21日")
+        self.assertIn("<p>日报正文</p>", kwargs["html_content"])
+        self.assertNotIn("此邮件由报告管理工具自动发送", kwargs["html_content"])
+        self.assertNotIn("附件为 Word 文档", kwargs["html_content"])
         self.assertEqual(
             kwargs["attachments"],
             [{"filename": docx_path.name, "path": docx_path}],

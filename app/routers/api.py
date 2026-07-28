@@ -547,7 +547,6 @@ body{{font-family:"Microsoft YaHei","PingFang SC",sans-serif;font-size:14px;colo
 h3{{font-size:15px}}
 </style></head><body>
 {html_content}
-<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;color:#9ca3af;font-size:12px">此邮件由报告管理工具自动发送 · 附件为 Word 文档</div>
 </body></html>"""
 
     result = send_email(
