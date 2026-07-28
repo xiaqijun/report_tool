@@ -1310,8 +1310,8 @@ class DailyReportEmailHtmlTests(TestCase):
                     <body><div title="header"><p>页眉</p></div><table width="737"><tr>
                     <td bgcolor="#d9d9d9" style="border: 1px solid #5b9bd5">
                     <img src="chart.png" width="737" height="124" /></td></tr><tr>
-                    <td><p align="center" style="margin-bottom:0in">居中段落</p>
-                    <p align="justify">两端对齐段落</p>
+                    <td><p align="center" style="margin-bottom:0in"><font face="宋体" size="4" style="font-size:14pt">居中标题</font></p>
+                    <p align="justify"><font face="Arial" size="2" style="font-size:9pt">两端对齐段落</font></p>
                     <table><tr><td rowspan="7">运营人员</td><td>张三</td></tr></table></td>
                     </tr></table><div title="footer"><p>页脚</p></div></body></html>""",
                     encoding="utf-8",
@@ -1328,8 +1328,19 @@ class DailyReportEmailHtmlTests(TestCase):
         self.assertIn('style="border: 1px solid #5b9bd5"', html)
         self.assertIn('src="data:image/png;base64,aW1hZ2UtYnl0ZXM="', html)
         self.assertNotIn('src="chart.png"', html)
-        self.assertRegex(html, r'<p align="center" style="[^"]*text-align:center;[^"]*margin-bottom:0in">')
-        self.assertRegex(html, r'<p align="justify" style="[^"]*text-align:justify;[^"]*">')
+        self.assertNotIn('face="宋体"', html)
+        self.assertNotIn('face="Arial"', html)
+        self.assertIn('face="Microsoft YaHei" style="font-family:', html)
+        self.assertIn("font-size:14pt;", html)
+        self.assertIn("font-size:10pt;", html)
+        self.assertRegex(
+            html,
+            r'<p align="center" style="[^"]*margin-bottom:0in;[^"]*line-height:1.5;[^"]*margin-top:0;margin-bottom:6pt;[^"]*text-align:center;">',
+        )
+        self.assertRegex(
+            html,
+            r'<p align="justify" style="[^"]*font-size:10pt;[^"]*line-height:1.5;[^"]*text-align:justify;">',
+        )
         self.assertIn("max-width:737px", html)
         self.assertNotIn('title="footer"', html)
         self.assertNotIn("页脚", html)

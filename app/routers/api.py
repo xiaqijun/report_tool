@@ -330,16 +330,58 @@ def _docx_to_html(docx_path: str) -> str:
             flags=re.IGNORECASE | re.DOTALL,
         )
 
-        paragraph_defaults = (
-            "font-size:10pt;line-height:115%;orphans:0;widows:0;"
-            "margin-bottom:0.1in;direction:ltr;background:transparent;"
+        font_family = "'Microsoft YaHei','PingFang SC',Arial,sans-serif"
+
+        def normalize_font_tag(match: re.Match[str]) -> str:
+            attributes = match.group("attributes") or ""
+            style_match = re.search(
+                r'\bstyle\s*=\s*(?P<quote>["\'])(?P<value>.*?)(?P=quote)',
+                attributes,
+                re.IGNORECASE | re.DOTALL,
+            )
+            style_value = style_match.group("value") if style_match else ""
+            size_match = re.search(r"font-size\s*:\s*([0-9.]+)pt", style_value, re.IGNORECASE)
+            if size_match:
+                declared_size = float(size_match.group(1))
+            else:
+                legacy_size = re.search(r'\bsize\s*=\s*["\']?([1-7])', attributes, re.IGNORECASE)
+                declared_size = 14.0 if legacy_size and int(legacy_size.group(1)) >= 4 else 10.0
+            font_size = "14pt" if declared_size >= 13 else "10pt"
+            remaining_style = re.sub(
+                r"font-size\s*:\s*[^;]+;?",
+                "",
+                style_value,
+                flags=re.IGNORECASE,
+            ).strip()
+
+            for attribute_name in ("face", "size", "style"):
+                attributes = re.sub(
+                    rf'\s+{attribute_name}\s*=\s*(?:["\'][^"\']*["\']|[^\s>]+)',
+                    "",
+                    attributes,
+                    flags=re.IGNORECASE,
+                )
+            normalized_style = f"font-family:{font_family};font-size:{font_size};"
+            if remaining_style:
+                normalized_style += remaining_style
+            return f'<font face="Microsoft YaHei" style="{normalized_style}"{attributes}>'
+
+        body_html = re.sub(
+            r"<font(?P<attributes>\s[^>]*)?>",
+            normalize_font_tag,
+            body_html,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+
+        paragraph_format = (
+            f"font-family:{font_family};font-size:10pt;line-height:1.5;"
+            "margin-top:0;margin-bottom:6pt;"
         )
 
         def inline_paragraph_style(match: re.Match[str]) -> str:
             attributes = match.group("attributes") or ""
             align_match = re.search(r'\balign\s*=\s*["\']?(left|center|right|justify)', attributes, re.IGNORECASE)
             alignment = f"text-align:{align_match.group(1).lower()};" if align_match else ""
-            defaults = paragraph_defaults + alignment
             style_match = re.search(
                 r'\bstyle\s*=\s*(?P<quote>["\'])(?P<value>.*?)(?P=quote)',
                 attributes,
@@ -347,12 +389,12 @@ def _docx_to_html(docx_path: str) -> str:
             )
             if style_match:
                 updated_style = (
-                    f'style={style_match.group("quote")}{defaults}'
-                    f'{style_match.group("value")}{style_match.group("quote")}'
+                    f'style={style_match.group("quote")}{style_match.group("value")}'
+                    f';{paragraph_format}{alignment}{style_match.group("quote")}'
                 )
                 attributes = attributes[:style_match.start()] + updated_style + attributes[style_match.end():]
             else:
-                attributes += f' style="{defaults}"'
+                attributes += f' style="{paragraph_format}{alignment}"'
             return f"<p{attributes}>"
 
         body_html = re.sub(
