@@ -254,7 +254,7 @@ class DocxGenerationTests(TestCase):
 
             self.assertTrue(file_path.exists())
             self.assertEqual(file_path.suffix, ".docx")
-            self.assertIn("2026-05-21", file_path.name)
+            self.assertEqual(file_path.name, "比亚迪规划院安全运营日报-2026年05月21日.docx")
 
     def test_top_banner_fits_first_table_cell(self):
         with TemporaryDirectory() as temp_dir:
@@ -1257,7 +1257,7 @@ class DailyReportEmailApiTests(TestCase):
             "cc": "copy@example.com",
             "subject": "",
         }
-        docx_path = Path("daily-report.docx")
+        docx_path = Path("比亚迪规划院安全运营日报-2026年07月21日.docx")
 
         with (
             patch("app.routers.api.require_login", return_value={"display_name": "Tester"}),
@@ -1276,4 +1276,8 @@ class DailyReportEmailApiTests(TestCase):
         self.assertEqual(kwargs["to_list"], ["first@example.com", "second@example.com"])
         self.assertEqual(kwargs["cc_list"], ["copy@example.com"])
         self.assertEqual(kwargs["subject"], "【安全运营日报】2026年07月21日")
+        self.assertEqual(
+            kwargs["attachments"],
+            [{"filename": docx_path.name, "path": docx_path}],
+        )
         self.assertIs(kwargs["smtp_config"], settings)

@@ -348,7 +348,7 @@ async def api_download_daily_report(request: Request, report_date: str = ""):
     return FileResponse(
         file_path,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        filename=f"安全运营日报-{report_date}.docx",
+        filename=file_path.name,
     )
 
 
@@ -415,7 +415,7 @@ h3{{font-size:15px}}
         subject=subject,
         html_content=html,
         cc_list=cc_list,
-        attachments=[{"filename": f"安全运营日报-{report_date}.docx", "path": docx_path}],
+        attachments=[{"filename": docx_path.name, "path": docx_path}],
         smtp_config=email_settings,
     )
     return result

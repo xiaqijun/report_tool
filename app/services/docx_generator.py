@@ -20,7 +20,7 @@ def generate_daily_report_docx(report: dict, operators: list[dict]) -> Path:
         raise FileNotFoundError(f"日报模板不存在: {DAILY_REPORT_TEMPLATE}")
     export_dir = EXPORT_DIR / "daily"
     export_dir.mkdir(parents=True, exist_ok=True)
-    file_path = export_dir / f"{report.get('report_date', '')}.docx"
+    file_path = export_dir / _build_report_filename(str(report.get("report_date", "")))
     _render_docx_template(DAILY_REPORT_TEMPLATE, file_path, _build_template_context(report, operators))
     return file_path
 
@@ -147,6 +147,15 @@ def _format_date_display(date_str: str) -> str:
 def _build_report_title(date_str: str) -> str:
     suffix = _format_date_display(date_str) if date_str else ""
     return f"比亚迪规划院安全运营日报-{suffix}" if suffix else "比亚迪规划院安全运营日报"
+
+
+def _build_report_filename(date_str: str) -> str:
+    try:
+        date_display = datetime.strptime(date_str, "%Y-%m-%d").strftime("%Y年%m月%d日")
+    except ValueError:
+        date_display = date_str
+    suffix = f"-{date_display}" if date_display else ""
+    return f"比亚迪规划院安全运营日报{suffix}.docx"
 
 
 def _replace_report_title(xml_text: str, report_title: str) -> str:
