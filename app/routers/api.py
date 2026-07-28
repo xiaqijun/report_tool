@@ -313,16 +313,54 @@ def _docx_to_html(docx_path: str) -> str:
             encoded = base64.b64encode(asset_path.read_bytes()).decode("ascii")
             return f'{match.group("prefix")}{match.group("quote")}data:{mime_type};base64,{encoded}{match.group("quote")}'
 
-        document_html = re.sub(
-            r'(?P<prefix><img\b[^>]*?\bsrc\s*=\s*)(?P<quote>["\'])(?P<source>.*?)(?P=quote)',
-            embed_image,
-            document_html,
-            flags=re.IGNORECASE | re.DOTALL,
-        )
-
         body_match = re.search(r"<body[^>]*>(.*?)</body>", document_html, re.IGNORECASE | re.DOTALL)
         if not body_match:
             raise RuntimeError("LibreOffice HTML conversion failed: body not found")
+
+        body_html = re.sub(
+            r'<div\b(?=[^>]*\btitle\s*=\s*["\'](?:header|footer)["\'])[^>]*>.*?</div>\s*',
+            "",
+            body_match.group(1),
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        body_html = re.sub(
+            r'(?P<prefix><img\b[^>]*?\bsrc\s*=\s*)(?P<quote>["\'])(?P<source>.*?)(?P=quote)',
+            embed_image,
+            body_html,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+
+        paragraph_defaults = (
+            "font-size:10pt;line-height:115%;orphans:0;widows:0;"
+            "margin-bottom:0.1in;direction:ltr;background:transparent;"
+        )
+
+        def inline_paragraph_style(match: re.Match[str]) -> str:
+            attributes = match.group("attributes") or ""
+            align_match = re.search(r'\balign\s*=\s*["\']?(left|center|right|justify)', attributes, re.IGNORECASE)
+            alignment = f"text-align:{align_match.group(1).lower()};" if align_match else ""
+            defaults = paragraph_defaults + alignment
+            style_match = re.search(
+                r'\bstyle\s*=\s*(?P<quote>["\'])(?P<value>.*?)(?P=quote)',
+                attributes,
+                re.IGNORECASE | re.DOTALL,
+            )
+            if style_match:
+                updated_style = (
+                    f'style={style_match.group("quote")}{defaults}'
+                    f'{style_match.group("value")}{style_match.group("quote")}'
+                )
+                attributes = attributes[:style_match.start()] + updated_style + attributes[style_match.end():]
+            else:
+                attributes += f' style="{defaults}"'
+            return f"<p{attributes}>"
+
+        body_html = re.sub(
+            r"<p(?P<attributes>\s[^>]*)?>",
+            inline_paragraph_style,
+            body_html,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
 
         styles = "\n".join(
             re.findall(r"<style\b[^>]*>(.*?)</style>", document_html, re.IGNORECASE | re.DOTALL)
@@ -335,7 +373,7 @@ def _docx_to_html(docx_path: str) -> str:
 .daily-report-email img {{ max-width: 100%; height: auto; }}
 </style>
 <div class="daily-report-email" style="width:100%;max-width:737px;margin:0 auto;color:#000;font-family:'Microsoft YaHei','PingFang SC',Arial,sans-serif;">
-{body_match.group(1)}
+{body_html}
 </div>
 """.strip()
 

@@ -1307,11 +1307,13 @@ class DailyReportEmailHtmlTests(TestCase):
                 (output_dir / "chart.png").write_bytes(b"image-bytes")
                 (output_dir / "日报.html").write_text(
                     """<!DOCTYPE html><html><head><style>p { font-size: 10pt; }</style></head>
-                    <body><div title="header">页眉</div><table width="737"><tr>
+                    <body><div title="header"><p>页眉</p></div><table width="737"><tr>
                     <td bgcolor="#d9d9d9" style="border: 1px solid #5b9bd5">
                     <img src="chart.png" width="737" height="124" /></td></tr><tr>
-                    <td><table><tr><td rowspan="7">运营人员</td><td>张三</td></tr></table></td>
-                    </tr></table><div title="footer">页脚</div></body></html>""",
+                    <td><p align="center" style="margin-bottom:0in">居中段落</p>
+                    <p align="justify">两端对齐段落</p>
+                    <table><tr><td rowspan="7">运营人员</td><td>张三</td></tr></table></td>
+                    </tr></table><div title="footer"><p>页脚</p></div></body></html>""",
                     encoding="utf-8",
                 )
                 return type("Result", (), {"returncode": 0, "stderr": b""})()
@@ -1319,14 +1321,18 @@ class DailyReportEmailHtmlTests(TestCase):
             with patch("subprocess.run", side_effect=convert_to_html):
                 html = api_router._docx_to_html(docx_path)
 
-        self.assertIn('<div title="header">页眉</div>', html)
+        self.assertNotIn('title="header"', html)
+        self.assertNotIn("页眉", html)
         self.assertIn('<table width="737">', html)
         self.assertIn('rowspan="7"', html)
         self.assertIn('style="border: 1px solid #5b9bd5"', html)
         self.assertIn('src="data:image/png;base64,aW1hZ2UtYnl0ZXM="', html)
         self.assertNotIn('src="chart.png"', html)
+        self.assertRegex(html, r'<p align="center" style="[^"]*text-align:center;[^"]*margin-bottom:0in">')
+        self.assertRegex(html, r'<p align="justify" style="[^"]*text-align:justify;[^"]*">')
         self.assertIn("max-width:737px", html)
-        self.assertIn('<div title="footer">页脚</div>', html)
+        self.assertNotIn('title="footer"', html)
+        self.assertNotIn("页脚", html)
 
 
 class DailyReportPreviewApiTests(TestCase):
