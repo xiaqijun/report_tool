@@ -309,6 +309,42 @@ class DocxGenerationTests(TestCase):
         self.assertEqual(layout_extent.attrib["cx"], graphic_extent.attrib["cx"])
         self.assertEqual(layout_extent.attrib["cy"], graphic_extent.attrib["cy"])
 
+    def test_report_table_uses_expanded_page_width(self):
+        with TemporaryDirectory() as temp_dir:
+            with patch("app.services.docx_generator.EXPORT_DIR", Path(temp_dir)):
+                file_path = generate_daily_report_docx({"report_date": "2026-07-27"}, [])
+
+            with ZipFile(file_path) as docx_zip:
+                document_root = ET.fromstring(docx_zip.read("word/document.xml"))
+
+        namespaces = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+        word_namespace = namespaces["w"]
+        width_attribute = f"{{{word_namespace}}}w"
+        page_size = document_root.find(".//w:sectPr/w:pgSz", namespaces)
+        page_margins = document_root.find(".//w:sectPr/w:pgMar", namespaces)
+        table_width = document_root.find(".//w:tbl/w:tblPr/w:tblW", namespaces)
+
+        self.assertIsNotNone(page_size)
+        self.assertIsNotNone(page_margins)
+        self.assertIsNotNone(table_width)
+        left_margin = int(page_margins.attrib[f"{{{word_namespace}}}left"])
+        right_margin = int(page_margins.attrib[f"{{{word_namespace}}}right"])
+        usable_width = int(page_size.attrib[width_attribute]) - left_margin - right_margin
+        self.assertLess(left_margin, 720)
+        self.assertLess(right_margin, 720)
+        self.assertGreater(usable_width, 9922)
+        self.assertEqual(int(table_width.attrib[width_attribute]), usable_width)
+
+    def test_template_omits_empty_tail_paragraph(self):
+        with ZipFile(DAILY_REPORT_TEMPLATE) as docx_zip:
+            document_root = ET.fromstring(docx_zip.read("word/document.xml"))
+
+        namespaces = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+        body = document_root.find("./w:body", namespaces)
+        self.assertIsNotNone(body)
+        child_tags = [child.tag.rsplit("}", 1)[-1] for child in list(body)]
+        self.assertEqual(child_tags, ["tbl", "sectPr"])
+
     def test_updates_header_title_with_report_date(self):
         report = {
             "report_date": "2026-05-21",
@@ -1036,7 +1072,7 @@ class DocxGenerationTests(TestCase):
         for row in operator_table.rows[1:]:
             tr_height = row._tr.trPr.trHeight
             self.assertIsNotNone(tr_height)
-            self.assertIn('w:val="442"', tr_height.xml)
+            self.assertIn('w:val="280"', tr_height.xml)
             self.assertEqual(str(tr_height.hRule), "AT_LEAST (1)")
 
 

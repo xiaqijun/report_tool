@@ -53,10 +53,15 @@ def generate_top_section_text(
     except Exception:
         return fallback
 
-    return {
+    result = {
         field: str(llm_result.get(field) or fallback[field]).strip()
         for field in target_fields
     }
+    if "trend_comparison" in result:
+        result["trend_comparison"] = _apply_comparison_reference(
+            result["trend_comparison"], report, previous
+        )
+    return result
 
 
 def _call_llm(
@@ -109,23 +114,31 @@ def _call_llm(
 
 
 def _build_prompt(report: dict[str, object], previous: dict[str, object] | None, fields: tuple[str, ...]) -> str:
+    comparison_reference = _comparison_reference(report, previous)
     lines = [
         "请根据以下安全日报数据，生成指定字段的文本。",
         "统一要求：",
         "1. 每个字段只输出1句话。",
         "2. 语言风格要贴近日报成稿：正式、简洁、稳健、少修饰，像人工整理后的正式日报。",
-        "3. 优先沿用历史句式骨架：‘今日业务运行稳定’、‘与昨日相比’、‘总体来看’。",
+        f"3. 优先沿用历史句式骨架：‘今日业务运行稳定’、‘{comparison_reference}’、‘总体来看’。",
         "4. 不要编造未提供的数据，不要重复堆砌原始数字，不要写建议、研判过程或口语化衔接。",
         "5. 若字段没有足够依据，只能做保守表述。",
         "本次需要生成的字段与要求：",
     ]
-    lines.extend(f"- {field}: {FIELD_INSTRUCTIONS[field]} 示例：{STYLE_EXAMPLES[field]}" for field in fields)
+    lines.extend(
+        f"- {field}: {FIELD_INSTRUCTIONS[field].replace('与昨日相比', comparison_reference).replace('无昨日数据', '无基准数据' if comparison_reference != '与昨日相比' else '无昨日数据')} "
+        f"示例：{STYLE_EXAMPLES[field].replace('与昨日相比', comparison_reference)}"
+        for field in fields
+    )
     lines.extend([
         "当前数据：",
         json.dumps(_prompt_report_snapshot(report), ensure_ascii=False),
     ])
     if previous:
-        lines.extend(["昨日数据：", json.dumps(_prompt_report_snapshot(previous), ensure_ascii=False)])
+        lines.extend([
+            f"对比基准数据（{comparison_reference}）：",
+            json.dumps(_prompt_report_snapshot(previous), ensure_ascii=False),
+        ])
     return "\n".join(lines)
 
 
@@ -195,8 +208,9 @@ def _generate_fallback_text(report: dict[str, object], previous: dict[str, objec
 
 
 def _build_trend_text(report: dict[str, object], previous: dict[str, object] | None) -> str:
+    comparison_reference = _comparison_reference(report, previous)
     if not previous:
-        return "与昨日相比，因缺少基线数据，暂无法开展趋势对比。"
+        return f"{comparison_reference}，因缺少基线数据，暂无法开展趋势对比。"
 
     items = [
         _build_trend_item("WAF攻击数量", report, previous, "waf_attacks"),
@@ -205,12 +219,42 @@ def _build_trend_text(report: dict[str, object], previous: dict[str, object] | N
         _build_trend_item("SecMaster告警数量", report, previous, "secmaster_alerts"),
     ]
     if all(item["direction"] == "flat" for item in items):
-        return "与昨日相比，各项核心攻击与告警指标整体持平，暂无明显波动。"
+        return f"{comparison_reference}，各项核心攻击与告警指标整体持平，暂无明显波动。"
     phrases: list[str] = []
     for direction in ("down", "up", "flat"):
         direction_items = [item for item in items if item["direction"] == direction]
         phrases.extend(_render_trend_group(group) for group in _group_trend_items(direction_items))
-    return f"与昨日相比，{'，'.join(phrases)}，整体波动处于预期范围内。"
+    return f"{comparison_reference}，{'，'.join(phrases)}，整体波动处于预期范围内。"
+
+
+def _comparison_reference(
+    report: dict[str, object], previous: dict[str, object] | None
+) -> str:
+    if not previous:
+        return "与昨日相比"
+
+    try:
+        current_date = datetime.strptime(str(report.get("report_date", "")), "%Y-%m-%d").date()
+        previous_date = datetime.strptime(str(previous.get("report_date", "")), "%Y-%m-%d").date()
+    except ValueError:
+        return "与昨日相比"
+
+    if previous_date >= current_date or (current_date - previous_date).days == 1:
+        return "与昨日相比"
+    if previous_date.year == current_date.year:
+        return f"与{previous_date.month}月{previous_date.day}日相比"
+    return f"与{previous_date.year}年{previous_date.month}月{previous_date.day}日相比"
+
+
+def _apply_comparison_reference(
+    text: str,
+    report: dict[str, object],
+    previous: dict[str, object] | None,
+) -> str:
+    comparison_reference = _comparison_reference(report, previous)
+    if comparison_reference == "与昨日相比":
+        return text
+    return text.replace("与昨日相比", comparison_reference).replace("较昨日相比", comparison_reference)
 
 
 def _build_trend_item(

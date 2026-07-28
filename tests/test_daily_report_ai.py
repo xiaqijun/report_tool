@@ -112,3 +112,32 @@ class DailyReportAiTests(TestCase):
         text = _build_trend_text(self.report, previous)
 
         self.assertEqual(text, "与昨日相比，各项核心攻击与告警指标整体持平，暂无明显波动。")
+
+    def test_trend_uses_previous_report_date_after_non_working_days(self):
+        report = {**self.report, "report_date": "2026-07-27"}
+        previous = {**self.previous, "report_date": "2026-07-24"}
+
+        text = _build_trend_text(report, previous)
+        prompt = _build_prompt(report, previous, ("trend_comparison",))
+
+        self.assertTrue(text.startswith("与7月24日相比，"))
+        self.assertIn("与7月24日相比", prompt)
+        self.assertNotIn("昨日数据", prompt)
+
+    def test_llm_yesterday_wording_is_corrected_for_previous_report_date(self):
+        report = {**self.report, "report_date": "2026-10-09"}
+        previous = {**self.previous, "report_date": "2026-09-30"}
+        expected = {
+            "business_stability": "今日业务运行稳定。",
+            "trend_comparison": "与昨日相比，各项指标整体平稳。",
+            "overall_assessment": "总体来看，安全态势平稳可控。",
+        }
+        with (
+            patch("app.services.daily_report_ai.LLM_API_BASE_URL", "https://example.com/v1"),
+            patch("app.services.daily_report_ai.LLM_API_KEY", "key"),
+            patch("app.services.daily_report_ai.LLM_MODEL", "model"),
+            patch("app.services.daily_report_ai._call_llm", return_value=expected),
+        ):
+            result = generate_top_section_text(report, previous)
+
+        self.assertTrue(result["trend_comparison"].startswith("与9月30日相比，"))
