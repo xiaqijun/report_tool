@@ -12,6 +12,7 @@ from starlette.requests import Request
 
 from app.routers import api as api_router
 from app.routers import daily_report as daily_report_router
+from app.services import docx_generator
 from app.services.docx_generator import DAILY_REPORT_TEMPLATE, generate_daily_report_docx
 
 
@@ -83,6 +84,28 @@ class TrendComputationTests(TestCase):
 
 
 class DocxGenerationTests(TestCase):
+    def test_report_sentence_punctuation_is_normalized(self):
+        report = {
+            "hss_closed_loop_status": "",
+            "hss_unclosed_event_count": 0,
+        }
+
+        summary = docx_generator._compose_summary_sentence(report)
+        self.assertNotIn("；", summary)
+        self.assertEqual(summary.count("。"), 5)
+        self.assertTrue(docx_generator._compose_waf_detail(report).endswith("。"))
+        self.assertTrue(docx_generator._compose_cfw_detail(report).endswith("。"))
+        self.assertTrue(docx_generator._compose_hss_detail(report).endswith("未闭环事件0个。"))
+        self.assertNotIn("，。", docx_generator._compose_hss_detail(report))
+
+        report["hss_closed_loop_status"] = "已全部闭环。"
+        self.assertTrue(docx_generator._compose_hss_detail(report).endswith("未闭环事件0个，已全部闭环。"))
+        self.assertNotIn("。。", docx_generator._compose_hss_detail(report))
+
+        doc = Document()
+        docx_generator._add_hss_detail(doc, report)
+        self.assertEqual(doc.paragraphs[0].text, docx_generator._compose_hss_detail(report))
+
     def _normalized_xml(self, element) -> str:
         if element is None:
             return ""

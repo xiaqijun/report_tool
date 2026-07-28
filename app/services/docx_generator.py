@@ -248,10 +248,10 @@ def _replace_paragraph_picture(paragraph, path_value: object) -> None:
 
 def _compose_summary_sentence(report: dict) -> str:
     parts = [
-        f"WAF遭受攻击{report.get('waf_attacks', 0)}次，拦截攻击告警{report.get('waf_blocked', 0)}次，已对{report.get('waf_ips_banned', 0)}个IP进行汇报封禁处理；",
-        f"CFW遭受攻击{report.get('cfw_attacks', 0)}次，{report.get('cfw_unblocked', 0)}次攻击未被拦截；",
-        f"HSS发生告警{report.get('hss_alerts', 0)}次，{_summary_unclosed_event_text(report.get('hss_unclosed_event_count', 0))}；",
-        f"DDos防护清洗{report.get('ddos_cleanings', 0)}次，{'无' if int(report.get('ddos_blackholes', 0) or 0) == 0 else f"{report.get('ddos_blackholes', 0)}次"}黑洞；",
+        f"WAF遭受攻击{report.get('waf_attacks', 0)}次，拦截攻击告警{report.get('waf_blocked', 0)}次，已对{report.get('waf_ips_banned', 0)}个IP进行汇报封禁处理。",
+        f"CFW遭受攻击{report.get('cfw_attacks', 0)}次，{report.get('cfw_unblocked', 0)}次攻击未被拦截。",
+        f"HSS发生告警{report.get('hss_alerts', 0)}次，{_summary_unclosed_event_text(report.get('hss_unclosed_event_count', 0))}。",
+        f"DDos防护清洗{report.get('ddos_cleanings', 0)}次，{'无' if int(report.get('ddos_blackholes', 0) or 0) == 0 else f"{report.get('ddos_blackholes', 0)}次"}黑洞。",
         f"SecMaster检测告警{report.get('secmaster_alerts', 0)}次，{_summary_unclosed_event_text(report.get('secmaster_unclosed_event_count', 0))}。",
     ]
     return "".join(parts)
@@ -276,7 +276,7 @@ def _compose_monitor_heading(report: dict) -> str:
 def _compose_waf_detail(report: dict) -> str:
     return (
         f"WAF应用防火墙遭受攻击{report.get('waf_detail_attacks', 0)}次，"
-        f"拦截攻击告警{report.get('waf_detail_blocked', 0)}次，已对{report.get('waf_ips_banned', 0)}个IP进行汇报封禁处理；"
+        f"拦截攻击告警{report.get('waf_detail_blocked', 0)}次，已对{report.get('waf_ips_banned', 0)}个IP进行汇报封禁处理。"
     )
 
 
@@ -292,7 +292,7 @@ def _compose_waf_qps_detail(report: dict) -> str:
 
 
 def _compose_cfw_detail(report: dict) -> str:
-    return f"CFW遭受攻击{report.get('cfw_detail_attacks', 0)}次攻击，{report.get('cfw_detail_unblocked', 0)}次攻击未被拦截；"
+    return f"CFW遭受攻击{report.get('cfw_detail_attacks', 0)}次攻击，{report.get('cfw_detail_unblocked', 0)}次攻击未被拦截。"
 
 
 def _compose_cfw_bandwidth_detail(report: dict) -> str:
@@ -307,11 +307,12 @@ def _compose_cfw_bandwidth_detail(report: dict) -> str:
 
 
 def _compose_hss_detail(report: dict) -> str:
+    closed_loop_status = str(report.get("hss_closed_loop_status", "")).strip().strip("，。；,.;")
+    status_text = f"，{closed_loop_status}" if closed_loop_status else ""
     return (
         f"HSS发生告警{report.get('hss_detail_total', 0)}次，其中致命告警{report.get('hss_detail_fatal', 0)}次，"
         f"高危告警{report.get('hss_detail_high', 0)}次，中危告警{report.get('hss_detail_medium', 0)}次，"
-        f"低危告警{report.get('hss_detail_low', 0)}次，未闭环事件{report.get('hss_unclosed_event_count', 0)}个，"
-        f"{report.get('hss_closed_loop_status', '')}。"
+        f"低危告警{report.get('hss_detail_low', 0)}次，未闭环事件{report.get('hss_unclosed_event_count', 0)}个{status_text}。"
     )
 
 
@@ -509,7 +510,7 @@ def _add_waf_detail(doc: Document, report: dict) -> None:
     blocked = report.get("waf_detail_blocked", 0)
     _add_para(doc,
         f"WAF应用防火墙遭受攻击{report.get('waf_detail_attacks', 0)}次，"
-        f"拦截攻击告警{blocked}次，已对{report.get('waf_ips_banned', 0)}个IP进行汇报封禁处理；"
+        f"拦截攻击告警{blocked}次，已对{report.get('waf_ips_banned', 0)}个IP进行汇报封禁处理。"
     )
     _add_optional_screenshot(doc, report.get("waf_screenshot_path", ""))
     qps_specs = str(report.get("waf_qps_specs", ""))
@@ -529,7 +530,7 @@ def _add_waf_detail(doc: Document, report: dict) -> None:
 def _add_cfw_detail(doc: Document, report: dict) -> None:
     _add_para(doc,
         f"CFW遭受攻击{report.get('cfw_detail_attacks', 0)}次攻击，"
-        f"{report.get('cfw_detail_unblocked', 0)}次攻击未被拦截；"
+        f"{report.get('cfw_detail_unblocked', 0)}次攻击未被拦截。"
     )
     _add_optional_screenshot(doc, report.get("cfw_screenshot_path", ""))
     bw_spec = str(report.get("cfw_bandwidth_spec", ""))
@@ -563,18 +564,7 @@ def _strip_gbps_unit(value: object) -> str:
 
 
 def _add_hss_detail(doc: Document, report: dict) -> None:
-    total = report.get("hss_detail_total", 0)
-    fatal = report.get("hss_detail_fatal", 0)
-    high = report.get("hss_detail_high", 0)
-    medium = report.get("hss_detail_medium", 0)
-    low = report.get("hss_detail_low", 0)
-    unclosed_count = report.get("hss_unclosed_event_count", 0)
-    closed = str(report.get("hss_closed_loop_status", ""))
-    unclosed_count_text = f"，未闭环事件{unclosed_count}个"
-    _add_para(doc,
-        f"HSS发生告警{total}次，其中致命告警{fatal}次，高危告警{high}次，"
-        f"中危告警{medium}次，低危告警{low}次{unclosed_count_text}，{closed}。"
-    )
+    _add_para(doc, _compose_hss_detail(report))
     _add_optional_screenshot(doc, report.get("hss_screenshot_path", ""))
 
 
