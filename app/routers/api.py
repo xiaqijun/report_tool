@@ -260,23 +260,84 @@ async def api_save_daily_report(request: Request):
 
 
 def _docx_to_html(docx_path: str) -> str:
-    """Convert DOCX to HTML using pandoc."""
-    import subprocess, base64 as _b64
-    from docx import Document as DocxReader
+    """Convert DOCX to email-safe HTML while preserving Word layout."""
+    import base64
+    import mimetypes
+    import re
+    import subprocess
+    from html import unescape
+    from tempfile import TemporaryDirectory
+    from urllib.parse import unquote
 
-    # Use pandoc for high-fidelity conversion, embedding images as base64
-    result = subprocess.run(
-        ['pandoc', docx_path, '-f', 'docx', '-t', 'html', '--embed-resources', '--standalone'],
-        capture_output=True, text=True, timeout=30
-    )
-    if result.returncode == 0 and result.stdout.strip():
-        # Extract body content from pandoc's standalone HTML
-        import re
-        body_match = re.search(r'<body[^>]*>(.*)</body>', result.stdout, re.DOTALL)
-        if body_match:
-            return body_match.group(1)
-        return result.stdout
-    raise RuntimeError(f"pandoc failed: {result.stderr}")
+    source_path = Path(docx_path).resolve()
+    with TemporaryDirectory(prefix="daily-report-email-") as temp_dir:
+        output_dir = Path(temp_dir)
+        profile_uri = (output_dir / "libreoffice-profile").resolve().as_uri()
+        result = subprocess.run(
+            [
+                "/usr/bin/soffice",
+                f"-env:UserInstallation={profile_uri}",
+                "--headless",
+                "--convert-to",
+                "html",
+                "--outdir",
+                str(output_dir),
+                str(source_path),
+            ],
+            capture_output=True,
+            timeout=60,
+        )
+
+        html_path = output_dir / f"{source_path.stem}.html"
+        if result.returncode != 0 or not html_path.exists():
+            error = result.stderr.decode("utf-8", errors="replace").strip()
+            raise RuntimeError(f"LibreOffice HTML conversion failed: {error or 'no output file'}")
+
+        document_html = html_path.read_text(encoding="utf-8", errors="replace")
+        output_root = output_dir.resolve()
+
+        def embed_image(match: re.Match[str]) -> str:
+            source = unescape(match.group("source"))
+            if source.startswith(("data:", "cid:", "http://", "https://")):
+                return match.group(0)
+
+            asset_path = (output_dir / unquote(source)).resolve()
+            try:
+                asset_path.relative_to(output_root)
+            except ValueError:
+                return match.group(0)
+            if not asset_path.is_file():
+                return match.group(0)
+
+            mime_type = mimetypes.guess_type(asset_path.name)[0] or "application/octet-stream"
+            encoded = base64.b64encode(asset_path.read_bytes()).decode("ascii")
+            return f'{match.group("prefix")}{match.group("quote")}data:{mime_type};base64,{encoded}{match.group("quote")}'
+
+        document_html = re.sub(
+            r'(?P<prefix><img\b[^>]*?\bsrc\s*=\s*)(?P<quote>["\'])(?P<source>.*?)(?P=quote)',
+            embed_image,
+            document_html,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+
+        body_match = re.search(r"<body[^>]*>(.*?)</body>", document_html, re.IGNORECASE | re.DOTALL)
+        if not body_match:
+            raise RuntimeError("LibreOffice HTML conversion failed: body not found")
+
+        styles = "\n".join(
+            re.findall(r"<style\b[^>]*>(.*?)</style>", document_html, re.IGNORECASE | re.DOTALL)
+        )
+        return f"""
+<style type="text/css">
+{styles}
+.daily-report-email {{ width: 100%; max-width: 737px; margin: 0 auto; color: #000; font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif; }}
+.daily-report-email table {{ max-width: 100%; border-collapse: collapse; }}
+.daily-report-email img {{ max-width: 100%; height: auto; }}
+</style>
+<div class="daily-report-email" style="width:100%;max-width:737px;margin:0 auto;color:#000;font-family:'Microsoft YaHei','PingFang SC',Arial,sans-serif;">
+{body_match.group(1)}
+</div>
+""".strip()
 
 
 @router.get("/daily-report/preview")

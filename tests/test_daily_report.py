@@ -1296,6 +1296,39 @@ class DailyReportEmailApiTests(TestCase):
         self.assertIs(kwargs["smtp_config"], settings)
 
 
+class DailyReportEmailHtmlTests(TestCase):
+    def test_docx_html_preserves_word_tables_and_embeds_images(self):
+        with TemporaryDirectory() as temp_dir:
+            docx_path = Path(temp_dir) / "日报.docx"
+            docx_path.write_bytes(b"docx")
+
+            def convert_to_html(command, **_kwargs):
+                output_dir = Path(command[command.index("--outdir") + 1])
+                (output_dir / "chart.png").write_bytes(b"image-bytes")
+                (output_dir / "日报.html").write_text(
+                    """<!DOCTYPE html><html><head><style>p { font-size: 10pt; }</style></head>
+                    <body><div title="header">页眉</div><table width="737"><tr>
+                    <td bgcolor="#d9d9d9" style="border: 1px solid #5b9bd5">
+                    <img src="chart.png" width="737" height="124" /></td></tr><tr>
+                    <td><table><tr><td rowspan="7">运营人员</td><td>张三</td></tr></table></td>
+                    </tr></table><div title="footer">页脚</div></body></html>""",
+                    encoding="utf-8",
+                )
+                return type("Result", (), {"returncode": 0, "stderr": b""})()
+
+            with patch("subprocess.run", side_effect=convert_to_html):
+                html = api_router._docx_to_html(docx_path)
+
+        self.assertIn('<div title="header">页眉</div>', html)
+        self.assertIn('<table width="737">', html)
+        self.assertIn('rowspan="7"', html)
+        self.assertIn('style="border: 1px solid #5b9bd5"', html)
+        self.assertIn('src="data:image/png;base64,aW1hZ2UtYnl0ZXM="', html)
+        self.assertNotIn('src="chart.png"', html)
+        self.assertIn("max-width:737px", html)
+        self.assertIn('<div title="footer">页脚</div>', html)
+
+
 class DailyReportPreviewApiTests(TestCase):
     def test_refresh_cache_uses_branded_docx_and_pdf_paths(self):
         with TemporaryDirectory() as temp_dir:
