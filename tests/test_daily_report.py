@@ -305,9 +305,27 @@ class DocxGenerationTests(TestCase):
             self.assertIsNotNone(cell_width)
             self.assertEqual(int(cell_width.attrib[width_attribute]), table_width_dxa)
 
-        self.assertEqual(int(layout_extent.attrib["cx"]), table_width_dxa * 635)
+        image_width_emu = 6_300_000  # 17.5 cm
+        self.assertGreater(table_width_dxa * 635, image_width_emu)
+        self.assertEqual(int(layout_extent.attrib["cx"]), image_width_emu)
         self.assertEqual(layout_extent.attrib["cx"], graphic_extent.attrib["cx"])
         self.assertEqual(layout_extent.attrib["cy"], graphic_extent.attrib["cy"])
+
+        horizontal_offset = banner_anchor.find("./wp:positionH/wp:posOffset", namespaces)
+        self.assertIsNotNone(horizontal_offset)
+        self.assertEqual(
+            int(horizontal_offset.text),
+            (table_width_dxa * 635 - image_width_emu) // 2,
+        )
+
+        drawings = first_table.findall(".//wp:inline", namespaces) + first_table.findall(
+            ".//wp:anchor", namespaces
+        )
+        self.assertTrue(drawings)
+        for drawing in drawings:
+            extent = drawing.find("./wp:extent", namespaces)
+            self.assertIsNotNone(extent)
+            self.assertEqual(int(extent.attrib["cx"]), image_width_emu)
 
     def test_report_table_uses_expanded_page_width(self):
         with TemporaryDirectory() as temp_dir:
