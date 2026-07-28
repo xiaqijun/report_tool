@@ -305,27 +305,21 @@ class DocxGenerationTests(TestCase):
             self.assertIsNotNone(cell_width)
             self.assertEqual(int(cell_width.attrib[width_attribute]), table_width_dxa)
 
-        image_width_emu = 6_300_000  # 17.5 cm
-        self.assertGreater(table_width_dxa * 635, image_width_emu)
-        self.assertEqual(int(layout_extent.attrib["cx"]), image_width_emu)
+        banner_width_emu = table_width_dxa * 635
+        self.assertEqual(int(layout_extent.attrib["cx"]), banner_width_emu)
         self.assertEqual(layout_extent.attrib["cx"], graphic_extent.attrib["cx"])
         self.assertEqual(layout_extent.attrib["cy"], graphic_extent.attrib["cy"])
 
         horizontal_offset = banner_anchor.find("./wp:positionH/wp:posOffset", namespaces)
         self.assertIsNotNone(horizontal_offset)
-        self.assertEqual(
-            int(horizontal_offset.text),
-            (table_width_dxa * 635 - image_width_emu) // 2,
-        )
+        self.assertEqual(int(horizontal_offset.text), 0)
 
-        drawings = first_table.findall(".//wp:inline", namespaces) + first_table.findall(
-            ".//wp:anchor", namespaces
-        )
-        self.assertTrue(drawings)
-        for drawing in drawings:
+        body_images = first_table.findall(".//wp:inline", namespaces)
+        self.assertTrue(body_images)
+        for drawing in body_images:
             extent = drawing.find("./wp:extent", namespaces)
             self.assertIsNotNone(extent)
-            self.assertEqual(int(extent.attrib["cx"]), image_width_emu)
+            self.assertEqual(int(extent.attrib["cx"]), 6_300_000)  # 17.5 cm
 
     def test_report_table_uses_expanded_page_width(self):
         with TemporaryDirectory() as temp_dir:
@@ -1281,3 +1275,44 @@ class DailyReportEmailApiTests(TestCase):
             [{"filename": docx_path.name, "path": docx_path}],
         )
         self.assertIs(kwargs["smtp_config"], settings)
+
+
+class DailyReportPreviewApiTests(TestCase):
+    def test_refresh_cache_uses_branded_docx_and_pdf_paths(self):
+        with TemporaryDirectory() as temp_dir:
+            fake_api_file = Path(temp_dir) / "app" / "routers" / "api.py"
+            export_dir = Path(temp_dir) / "data" / "exports" / "daily"
+            docx_path = export_dir / "比亚迪规划院安全运营日报-2026年07月20日.docx"
+
+            def generate_docx(*_args, **_kwargs):
+                docx_path.parent.mkdir(parents=True, exist_ok=True)
+                docx_path.write_bytes(b"docx")
+                return docx_path
+
+            def convert_to_pdf(command, **_kwargs):
+                source_path = Path(command[-1])
+                source_path.with_suffix(".pdf").write_bytes(b"%PDF-1.4")
+                return type("Result", (), {"returncode": 0})()
+
+            with (
+                patch.object(api_router, "__file__", str(fake_api_file)),
+                patch("app.routers.api.require_login", return_value={"display_name": "Tester"}),
+                patch(
+                    "app.routers.api.db.get_daily_report_by_date",
+                    return_value={"report_date": "2026-07-20"},
+                ),
+                patch("app.routers.api.db.list_ops_personnel", return_value=[]),
+                patch(
+                    "app.services.docx_generator.generate_daily_report_docx",
+                    side_effect=generate_docx,
+                ),
+                patch("subprocess.run", side_effect=convert_to_pdf) as run_conversion,
+            ):
+                response = asyncio.run(
+                    api_router.api_preview_daily_report(
+                        object(), report_date="2026-07-20", refresh_cache=True
+                    )
+                )
+
+        self.assertEqual(response.body, b"%PDF-1.4")
+        self.assertEqual(Path(run_conversion.call_args.args[0][-1]), docx_path)

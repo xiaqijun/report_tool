@@ -287,7 +287,7 @@ async def api_preview_daily_report(request: Request, report_date: str = "", refr
         raise HTTPException(status_code=401, detail="未登录")
 
     from datetime import date
-    from ..services.docx_generator import generate_daily_report_docx
+    from ..services.docx_generator import _build_report_filename, generate_daily_report_docx
 
     if not report_date:
         report_date = date.today().isoformat()
@@ -295,31 +295,30 @@ async def api_preview_daily_report(request: Request, report_date: str = "", refr
     if not report:
         raise HTTPException(status_code=404, detail="未找到该日期的日报")
 
-    import subprocess, os as _os
+    import subprocess
     from pathlib import Path as _Path
-    export_dir = str(_Path(__file__).resolve().parent.parent.parent / "data" / "exports" / "daily")
-    docx_path_str = _os.path.join(export_dir, f"{report_date}.docx")
-    pdf_path_str = _os.path.join(export_dir, f"{report_date}.pdf")
+    export_dir = _Path(__file__).resolve().parent.parent.parent / "data" / "exports" / "daily"
+    docx_path = export_dir / _build_report_filename(report_date)
 
     # Generate DOCX if not cached, or when the preview explicitly requests a cache refresh.
-    if refresh_cache or not _os.path.exists(docx_path_str):
-        docx_path_str = str(generate_daily_report_docx(report, db.list_ops_personnel()))
+    if refresh_cache or not docx_path.exists():
+        docx_path = generate_daily_report_docx(report, db.list_ops_personnel())
+    pdf_path = docx_path.with_suffix(".pdf")
 
     # Convert to PDF if not cached, or rebuild it from the refreshed DOCX.
-    if refresh_cache or not _os.path.exists(pdf_path_str):
-        if refresh_cache and _os.path.exists(pdf_path_str):
-            _os.remove(pdf_path_str)
+    if refresh_cache or not pdf_path.exists():
+        if refresh_cache:
+            pdf_path.unlink(missing_ok=True)
         result = subprocess.run(
             ['/usr/bin/soffice', '--headless', '--convert-to', 'pdf',
-             '--outdir', export_dir, docx_path_str],
+             '--outdir', str(docx_path.parent), str(docx_path)],
             capture_output=True, timeout=30
         )
-        if result.returncode != 0 or not _os.path.exists(pdf_path_str):
+        if result.returncode != 0 or not pdf_path.exists():
             raise HTTPException(status_code=500, detail="PDF 预览缓存更新失败")
 
     from fastapi.responses import Response
-    with open(pdf_path_str, 'rb') as _pf:
-        pdf_bytes = _pf.read()
+    pdf_bytes = pdf_path.read_bytes()
     return Response(content=pdf_bytes, media_type="application/pdf",
                    headers={
                        "Content-Disposition": f"inline; filename=report-{report_date}.pdf",
