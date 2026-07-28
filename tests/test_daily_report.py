@@ -321,6 +321,25 @@ class DocxGenerationTests(TestCase):
             self.assertIsNotNone(extent)
             self.assertEqual(int(extent.attrib["cx"]), 6_300_000)  # 17.5 cm
 
+    def test_monitoring_content_starts_at_top_of_spanning_row(self):
+        with TemporaryDirectory() as temp_dir:
+            with patch("app.services.docx_generator.EXPORT_DIR", Path(temp_dir)):
+                file_path = generate_daily_report_docx({"report_date": "2026-07-27"}, [])
+
+            with ZipFile(file_path) as docx_zip:
+                document_root = ET.fromstring(docx_zip.read("word/document.xml"))
+
+        namespaces = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+        word_namespace = namespaces["w"]
+        rows = document_root.findall(".//w:tbl/w:tr", namespaces)
+        self.assertGreater(len(rows), 4)
+
+        monitoring_cell = rows[4].find("./w:tc", namespaces)
+        self.assertIsNotNone(monitoring_cell)
+        vertical_alignment = monitoring_cell.find("./w:tcPr/w:vAlign", namespaces)
+        self.assertIsNotNone(vertical_alignment)
+        self.assertEqual(vertical_alignment.attrib[f"{{{word_namespace}}}val"], "top")
+
     def test_report_table_uses_expanded_page_width(self):
         with TemporaryDirectory() as temp_dir:
             with patch("app.services.docx_generator.EXPORT_DIR", Path(temp_dir)):
