@@ -24,6 +24,16 @@ AGENTS.md
 
 # Frontend / React build
 frontend/
+!frontend/
+frontend/*
+!frontend/src/
+frontend/src/*
+!frontend/src/pages/
+frontend/src/pages/*
+!frontend/src/pages/Tools/
+frontend/src/pages/Tools/*
+!frontend/src/pages/Tools/TableMerge/
+!frontend/src/pages/Tools/TableMerge/**
 
 # Backup files
 *.backup.*

@@ -1,7 +1,11 @@
 """JSON API endpoints for React frontend."""
 
 from pathlib import Path
+from datetime import datetime
+import json
+import re
 import secrets
+import shutil
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
 from fastapi.responses import JSONResponse, FileResponse, RedirectResponse
@@ -12,6 +16,7 @@ import os
 
 from ..auth import require_login
 from .. import db
+from ..config import EXPORT_DIR
 
 router = APIRouter(prefix="/api")
 
@@ -1297,6 +1302,107 @@ async def api_system_update(request: Request):
 
 class IpQueryRequest(BaseModel):
     ips: list[str]
+
+
+@router.post("/tools/table-merge")
+async def api_table_merge(
+    request: Request,
+    files: list[UploadFile] = File(...),
+    deduplicate: bool = Form(True),
+):
+    """Merge uploaded Excel workbooks and optionally remove duplicate business rows."""
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+    if not files:
+        raise HTTPException(status_code=400, detail="请至少上传一个 Excel 或 ZIP 文件")
+
+    from ..services.table_tools import TableInput, merge_table_files
+
+    job_id = secrets.token_hex(12)
+    job_dir = EXPORT_DIR / "table-tools" / job_id
+    input_dir = job_dir / "inputs"
+    input_dir.mkdir(parents=True, exist_ok=False)
+    saved_inputs: list[TableInput] = []
+    max_upload_bytes = 2 * 1024 * 1024 * 1024
+
+    try:
+        for index, upload in enumerate(files, start=1):
+            original_name = Path(upload.filename or "").name
+            suffix = Path(original_name).suffix.lower()
+            if not original_name or suffix not in {".xlsx", ".xlsm", ".zip"}:
+                raise ValueError(f"不支持的文件类型：{original_name or '未命名文件'}")
+            stored_path = input_dir / f"{index:04d}{suffix}"
+            file_size = 0
+            with stored_path.open("wb") as target:
+                while chunk := await upload.read(1024 * 1024):
+                    file_size += len(chunk)
+                    if file_size > max_upload_bytes:
+                        raise ValueError(f"单个上传文件不能超过 2GB：{original_name}")
+                    target.write(chunk)
+            saved_inputs.append(TableInput(stored_path, original_name))
+
+        suffix_text = "合并去重" if deduplicate else "合并"
+        download_name = f"表格{suffix_text}_{datetime.now():%Y%m%d_%H%M%S}.xlsx"
+        output_path = job_dir / "result.xlsx"
+        stats = await run_in_threadpool(
+            merge_table_files,
+            saved_inputs,
+            output_path,
+            deduplicate=deduplicate,
+        )
+        manifest = {
+            "job_id": job_id,
+            "download_name": download_name,
+            "created_at": datetime.now().isoformat(timespec="seconds"),
+            "created_by": user.get("display_name") or user.get("username", ""),
+            "stats": stats,
+        }
+        (job_dir / "manifest.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return {
+            "job_id": job_id,
+            "filename": download_name,
+            "download_url": f"/api/tools/table-merge/{job_id}/download",
+            "stats": stats,
+        }
+    except ValueError as error:
+        shutil.rmtree(job_dir, ignore_errors=True)
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except Exception as error:
+        shutil.rmtree(job_dir, ignore_errors=True)
+        raise HTTPException(status_code=500, detail=f"表格处理失败：{error}") from error
+    finally:
+        for upload in files:
+            await upload.close()
+        shutil.rmtree(input_dir, ignore_errors=True)
+
+
+@router.get("/tools/table-merge/{job_id}/download")
+async def api_download_table_merge(request: Request, job_id: str):
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+    if not re.fullmatch(r"[0-9a-f]{24}", job_id):
+        raise HTTPException(status_code=404, detail="结果不存在")
+
+    job_dir = EXPORT_DIR / "table-tools" / job_id
+    output_path = job_dir / "result.xlsx"
+    manifest_path = job_dir / "manifest.json"
+    if not output_path.exists() or not manifest_path.exists():
+        raise HTTPException(status_code=404, detail="结果不存在或已清理")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        download_name = Path(str(manifest.get("download_name") or "表格合并结果.xlsx")).name
+    except (OSError, ValueError):
+        download_name = "表格合并结果.xlsx"
+    return FileResponse(
+        path=output_path,
+        filename=download_name,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 
 @router.post("/tools/ip-query")

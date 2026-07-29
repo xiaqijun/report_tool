@@ -13,6 +13,7 @@ import EmailSettingsPage from './pages/EmailSettings'
 import AdminPage from './pages/Admin'
 import ChangePasswordPage from './pages/ChangePassword'
 import IpQueryPage from './pages/Tools/IpQuery'
+import TableMergePage from './pages/Tools/TableMerge'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
@@ -80,6 +81,7 @@ export default function App() {
         <Route path="daily-report/email-settings" element={<EmailSettingsPage />} />
         <Route path="admin/:datasetKey" element={<AdminPage />} />
         <Route path="tools/ip-query" element={<IpQueryPage />} />
+        <Route path="tools/table-merge" element={<TableMergePage />} />
         <Route path="change-password" element={<ChangePasswordPage />} />
       </Route>
     </Routes>

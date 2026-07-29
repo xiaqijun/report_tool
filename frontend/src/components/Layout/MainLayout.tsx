@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { Layout, Nav, Button, Avatar, Dropdown } from '@douyinfe/semi-ui'
 import IconHome from '@douyinfe/semi-icons/lib/es/icons/IconHome'
@@ -14,16 +14,24 @@ import IconBell from '@douyinfe/semi-icons/lib/es/icons/IconBell'
 import IconCalendar from '@douyinfe/semi-icons/lib/es/icons/IconCalendar'
 import IconTick from '@douyinfe/semi-icons/lib/es/icons/IconTick'
 import IconSearch from '@douyinfe/semi-icons/lib/es/icons/IconSearch'
+import IconShieldStroked from '@douyinfe/semi-icons/lib/es/icons/IconShieldStroked'
 import { useAuthStore } from '../../store/auth'
 
 const { Header, Sider, Content } = Layout
 
 export default function MainLayout() {
-  const [collapsed, setCollapsed] = useState(false)
-  const [openKeys, setOpenKeys] = useState<string[]>(['host-alert', 'daily-report', 'tools'])
+  const [collapsed, setCollapsed] = useState(() => window.matchMedia('(max-width: 760px)').matches)
+  const [openKeys, setOpenKeys] = useState<string[]>(['host-alert', 'daily-report', 'vulnerability-management', 'tools'])
   const navigate = useNavigate()
   const location = useLocation()
   const { user, logout } = useAuthStore()
+
+  useEffect(() => {
+    const narrowScreen = window.matchMedia('(max-width: 760px)')
+    const syncSidebar = (event: MediaQueryListEvent) => setCollapsed(event.matches)
+    narrowScreen.addEventListener('change', syncSidebar)
+    return () => narrowScreen.removeEventListener('change', syncSidebar)
+  }, [])
 
   const handleLogout = async () => {
     await logout()
@@ -32,7 +40,10 @@ export default function MainLayout() {
 
   const isDailyReport = location.pathname.startsWith('/daily-report')
   const isTools = location.pathname.startsWith('/tools')
-  const currentModule = isTools ? '富强专用工具' : (isDailyReport ? '安全日报' : '主机预警')
+  const isVulnerabilityManagement = location.pathname === '/tools/table-merge'
+  const currentModule = isVulnerabilityManagement
+    ? '漏洞管理'
+    : (isTools ? '富强专用工具' : (isDailyReport ? '安全日报' : '主机预警'))
 
   const navItems = [
     {
@@ -66,6 +77,14 @@ export default function MainLayout() {
       icon: <IconTick />,
       items: [
         { itemKey: '/tools/ip-query', text: 'IP批量查询', icon: <IconSearch /> },
+      ],
+    },
+    {
+      itemKey: 'vulnerability-management',
+      text: '漏洞管理',
+      icon: <IconShieldStroked />,
+      items: [
+        { itemKey: '/tools/table-merge', text: '表格合并去重', icon: <IconFile /> },
       ],
     },
     {
@@ -138,6 +157,7 @@ export default function MainLayout() {
         </div>
         <Nav
           items={navItems}
+          isCollapsed={collapsed}
           selectedKeys={[location.pathname]}
           openKeys={openKeys}
           onOpenChange={({ openKeys: keys }) => setOpenKeys(keys as string[])}
