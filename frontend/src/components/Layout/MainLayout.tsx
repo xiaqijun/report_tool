@@ -84,7 +84,7 @@ export default function MainLayout() {
       text: '漏洞管理',
       icon: <IconShieldStroked />,
       items: [
-        { itemKey: '/tools/table-merge', text: '表格合并去重', icon: <IconFile /> },
+        { itemKey: '/tools/table-merge', text: '漏洞数据处理', icon: <IconFile /> },
       ],
     },
     {

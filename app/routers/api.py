@@ -1405,6 +1405,124 @@ async def api_download_table_merge(request: Request, job_id: str):
     )
 
 
+@router.post("/tools/vulnerability-process")
+async def api_vulnerability_process(
+    request: Request,
+    hss_files: list[UploadFile] = File(...),
+    elb_files: list[UploadFile] = File(...),
+    remove_risk_levels: str = Form("低危"),
+):
+    """Build a final HSS report from HSS and ELB source workbooks."""
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+    if not hss_files:
+        raise HTTPException(status_code=400, detail="请至少上传一个 HSS 漏洞报告")
+    if not elb_files:
+        raise HTTPException(status_code=400, detail="请至少上传一个 ELB 表格")
+
+    from ..services.table_tools import TableInput, process_vulnerability_files
+
+    job_id = secrets.token_hex(12)
+    job_dir = EXPORT_DIR / "vulnerability-tools" / job_id
+    input_dir = job_dir / "inputs"
+    hss_dir = input_dir / "hss"
+    elb_dir = input_dir / "elb"
+    hss_dir.mkdir(parents=True, exist_ok=False)
+    elb_dir.mkdir(parents=True, exist_ok=False)
+    max_upload_bytes = 2 * 1024 * 1024 * 1024
+
+    async def save_uploads(uploads: list[UploadFile], target_dir: Path) -> list[TableInput]:
+        saved: list[TableInput] = []
+        for index, upload in enumerate(uploads, start=1):
+            original_name = Path(upload.filename or "").name
+            suffix = Path(original_name).suffix.lower()
+            if not original_name or suffix not in {".xlsx", ".xlsm", ".zip"}:
+                raise ValueError(f"不支持的文件类型：{original_name or '未命名文件'}")
+            stored_path = target_dir / f"{index:04d}{suffix}"
+            file_size = 0
+            with stored_path.open("wb") as target:
+                while chunk := await upload.read(1024 * 1024):
+                    file_size += len(chunk)
+                    if file_size > max_upload_bytes:
+                        raise ValueError(f"单个上传文件不能超过 2GB：{original_name}")
+                    target.write(chunk)
+            saved.append(TableInput(stored_path, original_name))
+        return saved
+
+    try:
+        saved_hss = await save_uploads(hss_files, hss_dir)
+        saved_elb = await save_uploads(elb_files, elb_dir)
+        levels = [
+            level.strip()
+            for level in remove_risk_levels.replace("，", ",").split(",")
+            if level.strip()
+        ]
+        download_name = f"HSS漏洞主机报告_最终_{datetime.now():%Y%m%d_%H%M%S}.xlsx"
+        output_path = job_dir / "result.xlsx"
+        stats = await run_in_threadpool(
+            process_vulnerability_files,
+            saved_hss,
+            saved_elb,
+            output_path,
+            remove_risk_levels=levels,
+        )
+        manifest = {
+            "job_id": job_id,
+            "download_name": download_name,
+            "created_at": datetime.now().isoformat(timespec="seconds"),
+            "created_by": user.get("display_name") or user.get("username", ""),
+            "stats": stats,
+        }
+        (job_dir / "manifest.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return {
+            "job_id": job_id,
+            "filename": download_name,
+            "download_url": f"/api/tools/vulnerability-process/{job_id}/download",
+            "stats": stats,
+        }
+    except ValueError as error:
+        shutil.rmtree(job_dir, ignore_errors=True)
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except Exception as error:
+        shutil.rmtree(job_dir, ignore_errors=True)
+        raise HTTPException(status_code=500, detail=f"漏洞报告处理失败：{error}") from error
+    finally:
+        for upload in [*hss_files, *elb_files]:
+            await upload.close()
+        shutil.rmtree(input_dir, ignore_errors=True)
+
+
+@router.get("/tools/vulnerability-process/{job_id}/download")
+async def api_download_vulnerability_result(request: Request, job_id: str):
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+    if not re.fullmatch(r"[0-9a-f]{24}", job_id):
+        raise HTTPException(status_code=404, detail="结果不存在")
+
+    job_dir = EXPORT_DIR / "vulnerability-tools" / job_id
+    output_path = job_dir / "result.xlsx"
+    manifest_path = job_dir / "manifest.json"
+    if not output_path.exists() or not manifest_path.exists():
+        raise HTTPException(status_code=404, detail="结果不存在或已清理")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        download_name = Path(
+            str(manifest.get("download_name") or "HSS漏洞主机报告_最终.xlsx")
+        ).name
+    except (OSError, ValueError):
+        download_name = "HSS漏洞主机报告_最终.xlsx"
+    return FileResponse(
+        path=output_path,
+        filename=download_name,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
 @router.post("/tools/ip-query")
 async def api_ip_query(request: Request, body: Optional[IpQueryRequest] = None):
     """IP 批量查询 — 支持 JSON 和文件上传两种方式."""

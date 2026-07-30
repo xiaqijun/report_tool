@@ -308,3 +308,262 @@ def merge_table_files(
         "deduplicated": deduplicate,
         "columns": len(canonical_headers),
     }
+
+
+PUBLIC_SERVICE_HEADER = "是否是对外服务主机"
+HSS_IP_HEADER = "服务器IP"
+HSS_RISK_HEADER = "风险等级"
+ELB_BACKEND_IP_HEADER = "后端服务器-私网IP地址"
+
+
+def _verify_vulnerability_output(
+    path: Path,
+    expected_headers: Sequence[str],
+    expected_rows: int,
+) -> None:
+    with zipfile.ZipFile(path) as archive:
+        bad_entry = archive.testzip()
+        if bad_entry is not None:
+            raise RuntimeError(f"输出文件校验失败：{bad_entry}")
+
+        row_pattern = re.compile(rb'<row r="(\d+)"')
+        max_row = 0
+        overlap = b""
+        with archive.open("xl/worksheets/sheet1.xml") as sheet_file:
+            while chunk := sheet_file.read(1024 * 1024):
+                data = overlap + chunk
+                for match in row_pattern.finditer(data):
+                    max_row = max(max_row, int(match.group(1)))
+                overlap = data[-64:]
+
+    if max_row != expected_rows + 1:
+        raise RuntimeError("输出工作表行数校验失败。")
+
+    workbook = load_workbook(path, read_only=True, data_only=True, keep_links=False)
+    try:
+        if workbook.sheetnames != ["合并数据"]:
+            raise RuntimeError("输出工作表结构异常。")
+        sheet = workbook["合并数据"]
+        actual_headers = tuple(next(sheet.iter_rows(min_row=1, max_row=1, values_only=True)))
+        if actual_headers != tuple(expected_headers):
+            raise RuntimeError("输出表头校验失败。")
+    finally:
+        workbook.close()
+
+
+def process_vulnerability_files(
+    hss_inputs: Sequence[TableInput],
+    elb_inputs: Sequence[TableInput],
+    output_path: Path,
+    *,
+    remove_risk_levels: Sequence[str] = (),
+) -> dict[str, object]:
+    """Merge HSS and ELB inputs, mark public hosts, and filter selected risk levels."""
+    if not hss_inputs:
+        raise ValueError("请至少上传一个 HSS 漏洞报告。")
+    if not elb_inputs:
+        raise ValueError("请至少上传一个 ELB 表格。")
+
+    output_path = output_path.resolve()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    partial_path = output_path.with_name(f"{output_path.stem}.partial{output_path.suffix}")
+    if partial_path.exists():
+        partial_path.unlink()
+
+    normalized_remove_levels = {
+        str(level).strip()
+        for level in remove_risk_levels
+        if str(level).strip()
+    }
+
+    with TemporaryDirectory(prefix="vulnerability-tool-", dir=output_path.parent) as temp_dir:
+        temp_root = Path(temp_dir)
+        hss_workbooks = _collect_workbooks(hss_inputs, temp_root / "hss")
+        elb_workbooks = _collect_workbooks(elb_inputs, temp_root / "elb")
+
+        elb_headers: tuple[str, ...] | None = None
+        elb_seen: set[bytes] = set()
+        elb_ips: set[str] = set()
+        elb_rows_read = 0
+        elb_duplicate_rows = 0
+
+        for source in elb_workbooks:
+            try:
+                source_book = load_workbook(
+                    source.path,
+                    read_only=True,
+                    data_only=True,
+                    keep_links=False,
+                )
+            except Exception as error:
+                raise ValueError(f"无法读取 ELB Excel：{source.source_file}") from error
+
+            try:
+                source_sheet = source_book[source_book.sheetnames[0]]
+                rows = source_sheet.iter_rows(values_only=True)
+                try:
+                    headers = _normalize_headers(tuple(next(rows)))
+                except StopIteration as error:
+                    raise ValueError(f"ELB Excel 为空：{source.source_file}") from error
+                if ELB_BACKEND_IP_HEADER not in headers:
+                    raise ValueError(
+                        f"ELB 表格缺少“{ELB_BACKEND_IP_HEADER}”列：{source.source_file}"
+                    )
+                if elb_headers is None:
+                    elb_headers = headers
+                elif headers != elb_headers:
+                    raise ValueError(f"ELB 表头不一致：{source.source_file}")
+
+                column_count = len(elb_headers)
+                ip_index = elb_headers.index(ELB_BACKEND_IP_HEADER)
+                for row in rows:
+                    values = tuple(row[:column_count])
+                    if len(values) < column_count:
+                        values += (None,) * (column_count - len(values))
+                    if not any(value not in (None, "") for value in values):
+                        continue
+                    elb_rows_read += 1
+                    digest = _row_digest(values)
+                    if digest in elb_seen:
+                        elb_duplicate_rows += 1
+                        continue
+                    elb_seen.add(digest)
+                    ip_value = values[ip_index]
+                    if ip_value not in (None, ""):
+                        elb_ips.add(str(ip_value).strip())
+            finally:
+                source_book.close()
+
+        output_book = Workbook(write_only=True)
+        output_sheet = output_book.create_sheet("合并数据")
+        hss_headers: tuple[str, ...] | None = None
+        output_headers: tuple[str, ...] | None = None
+        hss_seen: set[bytes] = set()
+        hss_rows_read = 0
+        hss_duplicate_rows = 0
+        filtered_rows = 0
+        filtered_by_level: dict[str, int] = {}
+        public_rows = 0
+        non_public_rows = 0
+        rows_written = 0
+
+        try:
+            for source in hss_workbooks:
+                try:
+                    source_book = load_workbook(
+                        source.path,
+                        read_only=True,
+                        data_only=True,
+                        keep_links=False,
+                    )
+                except Exception as error:
+                    raise ValueError(f"无法读取 HSS Excel：{source.source_file}") from error
+
+                try:
+                    source_sheet = source_book[source_book.sheetnames[0]]
+                    rows = source_sheet.iter_rows(values_only=True)
+                    try:
+                        headers = _normalize_headers(tuple(next(rows)))
+                    except StopIteration as error:
+                        raise ValueError(f"HSS Excel 为空：{source.source_file}") from error
+                    for required_header in (HSS_IP_HEADER, HSS_RISK_HEADER):
+                        if required_header not in headers:
+                            raise ValueError(
+                                f"HSS 表格缺少“{required_header}”列：{source.source_file}"
+                            )
+                    if hss_headers is None:
+                        hss_headers = headers
+                        output_headers = (
+                            hss_headers
+                            if PUBLIC_SERVICE_HEADER in hss_headers
+                            else (*hss_headers, PUBLIC_SERVICE_HEADER)
+                        )
+                        _configure_sheet(output_sheet, output_headers)
+                        _append_styled_header(output_sheet, output_headers)
+                    elif headers != hss_headers:
+                        raise ValueError(f"HSS 表头不一致：{source.source_file}")
+
+                    column_count = len(hss_headers)
+                    ip_index = hss_headers.index(HSS_IP_HEADER)
+                    risk_index = hss_headers.index(HSS_RISK_HEADER)
+                    public_index = (
+                        hss_headers.index(PUBLIC_SERVICE_HEADER)
+                        if PUBLIC_SERVICE_HEADER in hss_headers
+                        else None
+                    )
+                    for row in rows:
+                        values = tuple(row[:column_count])
+                        if len(values) < column_count:
+                            values += (None,) * (column_count - len(values))
+                        if not any(value not in (None, "") for value in values):
+                            continue
+                        hss_rows_read += 1
+                        digest = _row_digest(values)
+                        if digest in hss_seen:
+                            hss_duplicate_rows += 1
+                            continue
+                        hss_seen.add(digest)
+
+                        risk_level = str(values[risk_index] or "").strip()
+                        if risk_level in normalized_remove_levels:
+                            filtered_rows += 1
+                            filtered_by_level[risk_level] = filtered_by_level.get(risk_level, 0) + 1
+                            continue
+
+                        server_ip = str(values[ip_index] or "").strip()
+                        is_public = "是" if server_ip and server_ip in elb_ips else "否"
+                        if is_public == "是":
+                            public_rows += 1
+                        else:
+                            non_public_rows += 1
+
+                        output_values = list(values)
+                        if public_index is None:
+                            output_values.append(is_public)
+                        else:
+                            output_values[public_index] = is_public
+                        if rows_written + 2 > EXCEL_MAX_ROWS:
+                            raise ValueError("处理结果超过 Excel 单工作表 1,048,576 行限制。")
+                        output_sheet.append(output_values)
+                        rows_written += 1
+                finally:
+                    source_book.close()
+
+            if hss_headers is None or output_headers is None:
+                raise ValueError("没有找到可处理的 HSS 表头。")
+            final_column = get_column_letter(len(output_headers))
+            output_sheet.auto_filter.ref = f"A1:{final_column}{rows_written + 1}"
+            output_sheet.sheet_properties.pageSetUpPr.fitToPage = True
+            output_sheet.page_setup.fitToWidth = 1
+            output_sheet.page_setup.fitToHeight = 0
+            output_book.save(partial_path)
+        except Exception:
+            if not partial_path.exists():
+                try:
+                    output_book.save(partial_path)
+                except Exception:
+                    pass
+            if partial_path.exists():
+                partial_path.unlink()
+            raise
+
+    _verify_vulnerability_output(partial_path, output_headers, rows_written)
+    os.replace(partial_path, output_path)
+    return {
+        "hss_input_files": len(hss_inputs),
+        "hss_workbooks": len(hss_workbooks),
+        "hss_rows_read": hss_rows_read,
+        "hss_duplicate_rows": hss_duplicate_rows,
+        "rows_written": rows_written,
+        "elb_input_files": len(elb_inputs),
+        "elb_workbooks": len(elb_workbooks),
+        "elb_rows_read": elb_rows_read,
+        "elb_duplicate_rows": elb_duplicate_rows,
+        "elb_unique_ips": len(elb_ips),
+        "public_rows": public_rows,
+        "non_public_rows": non_public_rows,
+        "filtered_rows": filtered_rows,
+        "filtered_by_level": filtered_by_level,
+        "remove_risk_levels": sorted(normalized_remove_levels),
+        "columns": len(output_headers),
+    }
