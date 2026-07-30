@@ -11,7 +11,7 @@ from starlette.datastructures import UploadFile
 from starlette.requests import Request
 
 from app.routers.api import api_download_vulnerability_result, api_vulnerability_process
-from app.services.table_tools import TableInput, merge_table_files, process_vulnerability_files
+from app.services.table_tools import TableInput, process_vulnerability_files
 
 
 def _write_workbook(path: Path, headers: list[str], rows: list[list[object]]) -> None:
@@ -34,79 +34,6 @@ def _workbook_upload(filename: str, headers: list[str], rows: list[list[object]]
     workbook.save(buffer)
     buffer.seek(0)
     return UploadFile(buffer, filename=filename)
-
-
-class TableToolsTests(TestCase):
-    def test_merges_direct_and_zipped_workbooks_with_deduplication_and_provenance(self) -> None:
-        with TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            direct = root / "直接上传.xlsx"
-            archived_workbook = root / "压缩包明细.xlsx"
-            archive = root / "批量数据.zip"
-            output = root / "result.xlsx"
-            headers = ["漏洞编号", "资产名称"]
-            _write_workbook(direct, headers, [["V-1", "主机A"], ["V-2", "主机B"]])
-            _write_workbook(archived_workbook, headers, [["V-2", "主机B"], ["V-3", "主机C"]])
-            with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as handle:
-                handle.write(archived_workbook, "目录/压缩包明细.xlsx")
-
-            stats = merge_table_files(
-                [TableInput(direct, direct.name), TableInput(archive, archive.name)],
-                output,
-                deduplicate=True,
-            )
-
-            self.assertEqual(stats["input_files"], 2)
-            self.assertEqual(stats["workbooks"], 2)
-            self.assertEqual(stats["rows_read"], 4)
-            self.assertEqual(stats["rows_written"], 3)
-            self.assertEqual(stats["duplicate_rows"], 1)
-
-            workbook = load_workbook(output, read_only=True, data_only=True)
-            try:
-                rows = list(workbook["合并明细"].iter_rows(values_only=True))
-            finally:
-                workbook.close()
-            self.assertEqual(
-                rows[0],
-                ("漏洞编号", "资产名称", "来源压缩包", "来源文件", "来源行号"),
-            )
-            self.assertEqual(rows[1], ("V-1", "主机A", None, "直接上传.xlsx", 2))
-            self.assertEqual(rows[2], ("V-2", "主机B", None, "直接上传.xlsx", 3))
-            self.assertEqual(rows[3], ("V-3", "主机C", "批量数据.zip", "目录/压缩包明细.xlsx", 3))
-
-    def test_can_merge_without_removing_duplicate_rows(self) -> None:
-        with TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            first = root / "first.xlsx"
-            second = root / "second.xlsx"
-            output = root / "result.xlsx"
-            _write_workbook(first, ["编号"], [[1]])
-            _write_workbook(second, ["编号"], [[1]])
-
-            stats = merge_table_files(
-                [TableInput(first, first.name), TableInput(second, second.name)],
-                output,
-                deduplicate=False,
-            )
-
-            self.assertEqual(stats["rows_read"], 2)
-            self.assertEqual(stats["rows_written"], 2)
-            self.assertEqual(stats["duplicate_rows"], 0)
-
-    def test_rejects_workbooks_with_different_headers(self) -> None:
-        with TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            first = root / "first.xlsx"
-            second = root / "second.xlsx"
-            _write_workbook(first, ["编号", "名称"], [[1, "A"]])
-            _write_workbook(second, ["编号", "说明"], [[2, "B"]])
-
-            with self.assertRaisesRegex(ValueError, "表头不一致"):
-                merge_table_files(
-                    [TableInput(first, first.name), TableInput(second, second.name)],
-                    root / "result.xlsx",
-                )
 
 
 class VulnerabilityProcessingTests(TestCase):
@@ -166,6 +93,40 @@ class VulnerabilityProcessingTests(TestCase):
             self.assertEqual(rows[1], ("V-1", "高危", "10.0.0.1", "是"))
             self.assertEqual(rows[2], ("V-3", "中危", "10.0.0.9", "否"))
             self.assertEqual(rows[3], ("V-4", "严重", "10.0.0.2", "是"))
+
+    def test_processes_hss_and_elb_workbooks_from_zip_files(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            hss_workbook = root / "hss.xlsx"
+            elb_workbook = root / "elb.xlsx"
+            hss_archive = root / "hss.zip"
+            elb_archive = root / "elb.zip"
+            output = root / "final.xlsx"
+            _write_workbook(
+                hss_workbook,
+                ["漏洞ID", "风险等级", "服务器IP"],
+                [["V-1", "高危", "10.0.0.1"]],
+            )
+            _write_workbook(
+                elb_workbook,
+                ["后端服务器-私网IP地址"],
+                [["10.0.0.1"]],
+            )
+            with zipfile.ZipFile(hss_archive, "w", zipfile.ZIP_DEFLATED) as archive:
+                archive.write(hss_workbook, "华南/HSS漏洞报告.xlsx")
+            with zipfile.ZipFile(elb_archive, "w", zipfile.ZIP_DEFLATED) as archive:
+                archive.write(elb_workbook, "广州/ELB后端.xlsx")
+
+            stats = process_vulnerability_files(
+                [TableInput(hss_archive, hss_archive.name)],
+                [TableInput(elb_archive, elb_archive.name)],
+                output,
+            )
+
+            self.assertEqual(stats["hss_workbooks"], 1)
+            self.assertEqual(stats["elb_workbooks"], 1)
+            self.assertEqual(stats["rows_written"], 1)
+            self.assertEqual(stats["public_rows"], 1)
 
     def test_rejects_hss_report_without_required_server_ip_header(self) -> None:
         with TemporaryDirectory() as temp_dir:

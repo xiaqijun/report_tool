@@ -60,49 +60,9 @@
   letter-spacing: 0;
 }
 
-.mode-switch {
-  width: max-content;
-  display: flex;
-  gap: 4px;
-  padding: 4px;
-  border: 1px solid #e2e8f0;
-  border-radius: 9px;
-  background: #f1f5f9;
-}
-
-.mode-switch button {
-  min-height: 36px;
-  padding: 0 18px;
-  border: 0;
-  border-radius: 6px;
-  color: #64748b;
-  background: transparent;
-  cursor: pointer;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 650;
-  transition: color .18s, background-color .18s, box-shadow .18s;
-}
-
-.mode-switch button:hover {
-  color: #1d4ed8;
-}
-
-.mode-switch button:focus-visible {
-  outline: 2px solid #60a5fa;
-  outline-offset: 1px;
-}
-
-.mode-switch button.is-active {
-  color: #1d4ed8;
-  background: #fff;
-  box-shadow: 0 1px 4px rgb(15 23 42 / 12%);
-}
-
 .pipeline-card,
 .file-bucket,
 .filter-panel,
-.generic-merge-card,
 .processing-state,
 .merge-result {
   border: 1px solid #dfe4ea;
@@ -393,42 +353,6 @@
   accent-color: #2563eb;
 }
 
-.generic-merge-card {
-  overflow: hidden;
-}
-
-.generic-merge-card > .file-bucket {
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-}
-
-.processing-bar {
-  min-height: 76px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 14px 18px;
-  border-top: 1px solid #e5e7eb;
-  background: #f8fafc;
-}
-
-.processing-bar label {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.processing-bar label > span {
-  display: grid;
-  gap: 2px;
-}
-
-.processing-bar small {
-  color: #64748b;
-}
-
 .processing-state {
   min-height: 104px;
   display: flex;
@@ -565,15 +489,6 @@
     font-size: 23px;
   }
 
-  .mode-switch {
-    width: 100%;
-  }
-
-  .mode-switch button {
-    flex: 1 1 50%;
-    padding: 0 10px;
-  }
-
   .pipeline-heading {
     align-items: flex-start;
     flex-direction: column;
@@ -626,11 +541,6 @@
 
   .filter-panel > .semi-button {
     width: 100%;
-  }
-
-  .processing-bar {
-    align-items: stretch;
-    flex-direction: column;
   }
 
   .result-title {
