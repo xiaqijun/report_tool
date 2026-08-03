@@ -1,7 +1,13 @@
 from unittest import TestCase
 from unittest.mock import patch
 
-from app.services.daily_report_ai import _build_prompt, _build_trend_text, generate_top_section_text
+from app.services.daily_report_ai import (
+    _build_prompt,
+    _build_trend_text,
+    detect_large_fluctuations,
+    generate_top_section_text,
+    polish_trend_comparison_with_reasons,
+)
 
 
 class DailyReportAiTests(TestCase):
@@ -232,3 +238,85 @@ class DailyReportAiTests(TestCase):
             result = generate_top_section_text(report, previous)
 
         self.assertTrue(result["trend_comparison"].startswith("与9月30日相比，"))
+
+    def test_detects_large_device_fluctuations(self):
+        report = {
+            **self.report,
+            "waf_attacks": 180,
+            "cfw_attacks": 25,
+            "hss_alerts": 4,
+            "secmaster_alerts": 6,
+        }
+        previous = {
+            **self.previous,
+            "report_date": "2026-05-20",
+            "waf_attacks": 100,
+            "cfw_attacks": 20,
+            "hss_alerts": 10,
+            "secmaster_alerts": 6,
+        }
+
+        result = detect_large_fluctuations(report, previous)
+
+        self.assertEqual([item["key"] for item in result], ["waf", "hss"])
+        self.assertEqual(result[0]["percent"], 80.0)
+        self.assertEqual(result[0]["direction"], "up")
+        self.assertEqual(result[1]["percent"], 60.0)
+        self.assertEqual(result[1]["direction"], "down")
+        self.assertEqual(result[1]["previous_date"], "2026-05-20")
+
+    def test_zero_baseline_with_new_alert_is_large_fluctuation(self):
+        report = {"hss_alerts": 1}
+        previous = {"hss_alerts": 0}
+
+        result = detect_large_fluctuations(report, previous)
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["key"], "hss")
+        self.assertIsNone(result[0]["percent"])
+        self.assertEqual(result[0]["direction"], "up")
+
+    def test_does_not_detect_small_or_flat_fluctuations(self):
+        report = {"waf_attacks": 149, "cfw_attacks": 20}
+        previous = {"waf_attacks": 100, "cfw_attacks": 20}
+
+        self.assertEqual(detect_large_fluctuations(report, previous), [])
+
+    def test_does_not_detect_fluctuations_without_previous_report(self):
+        self.assertEqual(detect_large_fluctuations(self.report, None), [])
+
+    def test_reason_polish_fallback_merges_same_reason(self):
+        reason_groups = [
+            {"device_metrics": ["WAF 应用防火墙攻击数量"], "reason": "业务发布后集中扫描"},
+            {"device_metrics": ["HSS 主机安全告警数量"], "reason": "业务发布后集中扫描。"},
+        ]
+        with (
+            patch("app.services.daily_report_ai.LLM_API_BASE_URL", ""),
+            patch("app.services.daily_report_ai.LLM_API_KEY", ""),
+            patch("app.services.daily_report_ai.LLM_MODEL", ""),
+            patch("app.services.daily_report_ai.get_effective_llm_settings", return_value={"enabled": False}),
+        ):
+            result = polish_trend_comparison_with_reasons("与昨日相比，相关指标波动较大。", reason_groups)
+
+        self.assertIn(
+            "本次WAF 应用防火墙攻击数量、HSS 主机安全告警数量异常均是受业务发布后集中扫描影响。",
+            result,
+        )
+
+    def test_reason_polish_keeps_original_when_reasons_are_empty(self):
+        source = "与昨日相比，各项指标整体平稳。"
+
+        self.assertEqual(polish_trend_comparison_with_reasons(source, []), source)
+
+    def test_reason_polish_uses_llm_result(self):
+        reason_groups = [{"device_metrics": ["HSS 主机安全告警数量"], "reason": "规则命中减少"}]
+        expected = "与昨日相比，HSS告警数量下降，本次异常是受规则命中减少影响。"
+        with (
+            patch("app.services.daily_report_ai.LLM_API_BASE_URL", "https://example.com/v1"),
+            patch("app.services.daily_report_ai.LLM_API_KEY", "key"),
+            patch("app.services.daily_report_ai.LLM_MODEL", "model"),
+            patch("app.services.daily_report_ai._call_trend_reason_polish_llm", return_value=expected),
+        ):
+            result = polish_trend_comparison_with_reasons("原文。", reason_groups)
+
+        self.assertEqual(result, expected)

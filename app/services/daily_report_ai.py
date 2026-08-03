@@ -8,6 +8,13 @@ from app.config import LLM_API_BASE_URL, LLM_API_KEY, LLM_MODEL, LLM_TIMEOUT_SEC
 
 TOP_SECTION_FIELDS = ("business_stability", "trend_comparison", "overall_assessment")
 
+FLUCTUATION_METRICS = (
+    ("waf", "WAF 应用防火墙", "攻击数量", "waf_attacks"),
+    ("cfw", "CFW 云防火墙", "攻击数量", "cfw_attacks"),
+    ("hss", "HSS 主机安全", "告警数量", "hss_alerts"),
+    ("secmaster", "SecMaster 态势感知", "告警数量", "secmaster_alerts"),
+)
+
 FIELD_INSTRUCTIONS = {
     "business_stability": "业务运行情况：只写1句话，优先贴近历史成稿句式‘今日业务运行稳定，……，整体安全状态稳定。’；先写运行状态，再写是否存在主机入侵或核心异常，结尾落到‘整体安全状态稳定/平稳’，不要写趋势判断，不要出现‘总体来看’。",
     "trend_comparison": "趋势对比说明：只写1句话，必须使用‘与昨日相比，’起句；先比较WAF、CFW、HSS、SecMaster等核心指标的上升、下降或持平，再结合拦截/封禁/未阻断、QPS与带宽是否超限、告警等级分布、未闭环及闭环情况分析变化原因；原因必须使用‘初步判断’‘可能与’等审慎口径，不得把推测写成确定事实；若现有指标不足以支撑原因判断，必须明确写‘具体原因暂无法确认，仍需结合攻击源、规则命中和业务变更信息进一步核实’，不能只写‘整体波动处于预期范围内’；避免逐项罗列具体增减值，对同向且波动幅度接近的指标优先合并表述，无昨日数据时写‘与昨日相比，因缺少基线数据，暂无法开展趋势对比。’。",
@@ -65,6 +72,182 @@ def generate_top_section_text(
             result["trend_comparison"], report, previous
         )
     return result
+
+
+def detect_large_fluctuations(
+    report: dict[str, object],
+    previous: dict[str, object] | None,
+    threshold: float = 0.5,
+) -> list[dict[str, object]]:
+    """Return devices whose attack or alert count changed beyond the threshold."""
+    if not previous:
+        return []
+
+    fluctuations: list[dict[str, object]] = []
+    previous_date = str(previous.get("report_date", "") or "").strip()
+    for key, name, metric, field in FLUCTUATION_METRICS:
+        current = _safe_count(report.get(field, 0))
+        baseline = _safe_count(previous.get(field, 0))
+        delta = current - baseline
+        if delta == 0:
+            continue
+
+        percent: float | None = None
+        if baseline > 0:
+            ratio = abs(delta) / baseline
+            if ratio < threshold:
+                continue
+            percent = round(ratio * 100, 1)
+        elif current <= 0:
+            continue
+
+        fluctuations.append(
+            {
+                "key": key,
+                "name": name,
+                "metric": metric,
+                "current": current,
+                "previous": baseline,
+                "previous_date": previous_date,
+                "delta": delta,
+                "percent": percent,
+                "direction": "up" if delta > 0 else "down",
+            }
+        )
+    return fluctuations
+
+
+def _safe_count(value: object) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def polish_trend_comparison_with_reasons(
+    trend_comparison: str,
+    reason_groups: list[dict[str, object]],
+) -> str:
+    """Polish the generated trend paragraph with user-confirmed fluctuation reasons."""
+    normalized_groups = _normalize_fluctuation_reason_groups(reason_groups)
+    source_text = str(trend_comparison or "").strip()
+    if not normalized_groups:
+        return source_text
+
+    fallback = _build_reason_polish_fallback(source_text, normalized_groups)
+    if LLM_API_BASE_URL or LLM_API_KEY or LLM_MODEL:
+        llm_settings = {
+            "enabled": bool(LLM_API_BASE_URL and LLM_API_KEY and LLM_MODEL),
+            "api_base_url": LLM_API_BASE_URL or "",
+            "api_key": LLM_API_KEY or "",
+            "model": LLM_MODEL or "",
+            "timeout_seconds": int(LLM_TIMEOUT_SECONDS or 30),
+        }
+    else:
+        llm_settings = get_effective_llm_settings()
+
+    if not (
+        bool(llm_settings.get("enabled"))
+        and str(llm_settings.get("api_base_url", "")).strip()
+        and str(llm_settings.get("api_key", "")).strip()
+        and str(llm_settings.get("model", "")).strip()
+    ):
+        return fallback
+
+    try:
+        polished = _call_trend_reason_polish_llm(source_text, normalized_groups, llm_settings)
+    except Exception:
+        return fallback
+    return polished or fallback
+
+
+def _normalize_fluctuation_reason_groups(
+    reason_groups: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    grouped_metrics: dict[str, list[str]] = {}
+    for group in reason_groups or []:
+        if not isinstance(group, dict):
+            continue
+        reason = str(group.get("reason", "") or "").strip().rstrip("。；;，, ")
+        raw_metrics = group.get("device_metrics", [])
+        if not reason or not isinstance(raw_metrics, list):
+            continue
+        metrics = [str(metric).strip() for metric in raw_metrics if str(metric).strip()]
+        if not metrics:
+            continue
+        target = grouped_metrics.setdefault(reason, [])
+        for metric in metrics:
+            if metric not in target:
+                target.append(metric)
+    return [
+        {"reason": reason, "device_metrics": metrics}
+        for reason, metrics in grouped_metrics.items()
+    ]
+
+
+def _build_reason_polish_fallback(
+    trend_comparison: str,
+    reason_groups: list[dict[str, object]],
+) -> str:
+    details: list[str] = []
+    for group in reason_groups:
+        metrics = "、".join(str(metric) for metric in group["device_metrics"])
+        reason = str(group["reason"])
+        qualifier = "均是" if len(group["device_metrics"]) > 1 else "是"
+        details.append(f"本次{metrics}异常{qualifier}受{reason}影响")
+    source = trend_comparison.strip().rstrip("。；; ")
+    verified = "；".join(details) + "。"
+    return f"{source}；{verified}" if source else verified
+
+
+def _call_trend_reason_polish_llm(
+    trend_comparison: str,
+    reason_groups: list[dict[str, object]],
+    llm_settings: dict[str, object],
+) -> str:
+    payload = {
+        "model": llm_settings["model"],
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "你是企业安全运营日报编辑。请将原趋势文案与运营人员核实的真实原因整合为一段正式成稿。"
+                    "必须保留原文中的指标变化事实，不得改变上升、下降或持平结论；用户填写的原因属于已核实事实，"
+                    "应替换原文中笼统的推测性原因。相同原因对应多个设备时必须合并表达，优先使用"
+                    "‘本次……异常均是受……影响’句式。文字应简洁、连贯、书面化，不得编造新原因，不输出 Markdown。"
+                    "请仅输出 JSON，格式为 {\"trend_comparison\": \"润色后的完整文案\"}。"
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"原趋势文案：{trend_comparison}\n"
+                    "已核实的波动原因："
+                    f"{json.dumps(reason_groups, ensure_ascii=False)}"
+                ),
+            },
+        ],
+        "temperature": 0.1,
+        "response_format": {"type": "json_object"},
+    }
+    req = request.Request(
+        url=f"{llm_settings['api_base_url']}/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {llm_settings['api_key']}",
+        },
+        method="POST",
+    )
+    try:
+        with request.urlopen(req, timeout=int(llm_settings.get("timeout_seconds", 30) or 30)) as response:
+            body = json.loads(response.read().decode("utf-8"))
+    except error.URLError as exc:
+        raise RuntimeError("LLM trend polish request failed") from exc
+
+    content = body.get("choices", [{}])[0].get("message", {}).get("content", "")
+    parsed = json.loads(content)
+    return str(parsed.get("trend_comparison", "") or "").strip()
 
 
 def _call_llm(

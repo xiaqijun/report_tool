@@ -176,7 +176,7 @@ async def api_generate_top_section(request: Request):
         raise HTTPException(status_code=401, detail="未登录")
 
     from datetime import date
-    from ..services.daily_report_ai import generate_top_section_text
+    from ..services.daily_report_ai import detect_large_fluctuations, generate_top_section_text
     from ..routers.daily_report import SUMMARY_FIELD_MAPPINGS, NUMERIC_FIELDS
 
     body = await request.json()
@@ -208,7 +208,28 @@ async def api_generate_top_section(request: Request):
     for sf, df in SUMMARY_FIELD_MAPPINGS.items():
         previous[sf] = int(previous.get(df, previous.get(sf, 0)) or 0)
 
-    return generate_top_section_text(payload, previous, fields=fields)
+    generated = generate_top_section_text(payload, previous, fields=fields)
+    generated["trend_fluctuations"] = detect_large_fluctuations(payload, previous)
+    return generated
+
+
+@router.post("/daily-report/polish-trend-reasons")
+async def api_polish_trend_reasons(request: Request):
+    """Polish trend comparison text with user-confirmed fluctuation reasons."""
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+
+    from ..services.daily_report_ai import polish_trend_comparison_with_reasons
+
+    body = await request.json()
+    trend_comparison = str(body.get("trend_comparison", "") or "").strip()
+    reason_groups = body.get("reason_groups", [])
+    if not isinstance(reason_groups, list):
+        raise HTTPException(status_code=400, detail="波动原因格式错误")
+
+    polished = polish_trend_comparison_with_reasons(trend_comparison, reason_groups)
+    return {"trend_comparison": polished}
 
 
 @router.post("/daily-report/save")
