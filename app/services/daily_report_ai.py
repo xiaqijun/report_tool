@@ -10,13 +10,13 @@ TOP_SECTION_FIELDS = ("business_stability", "trend_comparison", "overall_assessm
 
 FIELD_INSTRUCTIONS = {
     "business_stability": "业务运行情况：只写1句话，优先贴近历史成稿句式‘今日业务运行稳定，……，整体安全状态稳定。’；先写运行状态，再写是否存在主机入侵或核心异常，结尾落到‘整体安全状态稳定/平稳’，不要写趋势判断，不要出现‘总体来看’。",
-    "trend_comparison": "趋势对比说明：只写1句话，必须使用‘与昨日相比，’起句；只比较WAF、CFW、HSS、SecMaster等核心指标的上升、下降或持平，避免逐项罗列具体增减值，优先归纳为‘有所上升/有所下降/基本持平’；对同向且波动幅度接近的指标优先合并表述，如‘WAF攻击数量、HSS告警数量均有所下降’；可在句末补‘整体波动处于预期范围内’，无昨日数据时写‘与昨日相比，因缺少基线数据，暂无法开展趋势对比。’。",
+    "trend_comparison": "趋势对比说明：只写1句话，必须使用‘与昨日相比，’起句；先比较WAF、CFW、HSS、SecMaster等核心指标的上升、下降或持平，再结合拦截/封禁/未阻断、QPS与带宽是否超限、告警等级分布、未闭环及闭环情况分析变化原因；原因必须使用‘初步判断’‘可能与’等审慎口径，不得把推测写成确定事实；若现有指标不足以支撑原因判断，必须明确写‘具体原因暂无法确认，仍需结合攻击源、规则命中和业务变更信息进一步核实’，不能只写‘整体波动处于预期范围内’；避免逐项罗列具体增减值，对同向且波动幅度接近的指标优先合并表述，无昨日数据时写‘与昨日相比，因缺少基线数据，暂无法开展趋势对比。’。",
     "overall_assessment": "总体评估：只写1句话，必须使用‘总体来看，’起句；优先贴近历史成稿句式‘总体来看，整体安全态势保持平稳可控。’；只给结论，不重复罗列产品数据，不写建议项。",
 }
 
 STYLE_EXAMPLES = {
     "business_stability": "今日业务运行稳定，无主机入侵事件，整体安全状态稳定。",
-    "trend_comparison": "与昨日相比，WAF攻击数量、HSS告警数量均有所下降，SecMaster告警数量有所上升，CFW攻击数量基本持平，整体波动处于预期范围内。",
+    "trend_comparison": "与昨日相比，WAF攻击数量、HSS告警数量均有所下降，SecMaster告警数量有所上升，CFW攻击数量基本持平；结合拦截及高危告警变化，初步判断可能与不同攻击面活跃度和安全规则命中结构变化有关，具体原因仍需结合攻击源和业务变更信息进一步核实。",
     "overall_assessment": "总体来看，整体安全态势保持平稳可控。",
 }
 
@@ -61,6 +61,9 @@ def generate_top_section_text(
         result["trend_comparison"] = _apply_comparison_reference(
             result["trend_comparison"], report, previous
         )
+        result["trend_comparison"] = _ensure_trend_reason_analysis(
+            result["trend_comparison"], report, previous
+        )
     return result
 
 
@@ -81,7 +84,9 @@ def _call_llm(
                     "请严格模仿企业安全运营日报的历史成稿口径，句式克制、偏书面、偏结论化，不写营销语言，不写套话，不写 Markdown。"
                     "顶部三段要写成可直接贴入正式日报模板的成稿，不要写成模型说明或数据摘要。"
                     "其中业务运行情况优先贴近‘今日业务运行稳定，……，整体安全状态稳定。’；"
-                    "趋势对比说明优先贴近‘与昨日相比，……，整体波动处于预期范围内。’；"
+                    "趋势对比说明必须同时写清指标变化和可能原因，不得只写上升、下降或‘整体波动处于预期范围内’；"
+                    "原因只能根据拦截/封禁/未阻断、QPS与带宽、告警等级、未闭环及闭环情况进行审慎推断，"
+                    "使用‘初步判断’‘可能与’等口径，证据不足时明确说明具体原因暂无法确认；"
                     "趋势对比说明不要逐项堆砌具体增减值，优先合并同向且幅度接近的指标；"
                     "总体评估优先贴近‘总体来看，整体安全态势保持平稳可控。’。"
                     f"请仅输出 JSON，对象中必须只包含这几个字段：{', '.join(fields)}。"
@@ -122,7 +127,8 @@ def _build_prompt(report: dict[str, object], previous: dict[str, object] | None,
         "2. 语言风格要贴近日报成稿：正式、简洁、稳健、少修饰，像人工整理后的正式日报。",
         f"3. 优先沿用历史句式骨架：‘今日业务运行稳定’、‘{comparison_reference}’、‘总体来看’。",
         "4. 不要编造未提供的数据，不要重复堆砌原始数字，不要写建议、研判过程或口语化衔接。",
-        "5. 若字段没有足够依据，只能做保守表述。",
+        "5. 趋势对比必须在变化描述后分析可能原因，原因只能依据所提供的辅助指标，不能编造攻击源、业务发布或策略调整等事实。",
+        "6. 若辅助指标不足以支撑原因判断，必须明确说明具体原因暂无法确认，仍需结合攻击源、规则命中和业务变更信息进一步核实。",
         "本次需要生成的字段与要求：",
     ]
     lines.extend(
@@ -157,14 +163,30 @@ def _prompt_report_snapshot(report: dict[str, object]) -> dict[str, object]:
         "waf_attacks": int(report.get("waf_attacks", 0) or 0),
         "waf_blocked": int(report.get("waf_blocked", 0) or 0),
         "waf_ips_banned": int(report.get("waf_ips_banned", 0) or 0),
+        "waf_qps_peak_value": int(report.get("waf_qps_peak_value", 0) or 0),
+        "waf_exceeded_spec": bool(report.get("waf_exceeded_spec", False)),
         "cfw_attacks": int(report.get("cfw_attacks", 0) or 0),
         "cfw_unblocked": int(report.get("cfw_unblocked", 0) or 0),
+        "cfw_inbound_peak": str(report.get("cfw_inbound_peak", "") or ""),
+        "cfw_inbound_95th": str(report.get("cfw_inbound_95th", "") or ""),
+        "cfw_exceeded_spec": bool(report.get("cfw_exceeded_spec", False)),
         "hss_alerts": int(report.get("hss_alerts", 0) or 0),
+        "hss_detail_fatal": int(report.get("hss_detail_fatal", 0) or 0),
+        "hss_detail_high": int(report.get("hss_detail_high", 0) or 0),
+        "hss_detail_medium": int(report.get("hss_detail_medium", 0) or 0),
+        "hss_detail_low": int(report.get("hss_detail_low", 0) or 0),
         "hss_unclosed_event_count": int(report.get("hss_unclosed_event_count", 0) or 0),
+        "hss_closed_loop_status": str(report.get("hss_closed_loop_status", "") or ""),
         "ddos_cleanings": int(report.get("ddos_cleanings", 0) or 0),
         "ddos_blackholes": int(report.get("ddos_blackholes", 0) or 0),
         "secmaster_alerts": int(report.get("secmaster_alerts", 0) or 0),
+        "secmaster_detail_fatal": int(report.get("secmaster_detail_fatal", 0) or 0),
+        "secmaster_detail_high": int(report.get("secmaster_detail_high", 0) or 0),
+        "secmaster_detail_medium": int(report.get("secmaster_detail_medium", 0) or 0),
+        "secmaster_detail_low": int(report.get("secmaster_detail_low", 0) or 0),
+        "secmaster_detail_info": int(report.get("secmaster_detail_info", 0) or 0),
         "secmaster_unclosed_event_count": int(report.get("secmaster_unclosed_event_count", 0) or 0),
+        "emergency_response": str(report.get("emergency_response", "") or ""),
     }
 
 
@@ -219,12 +241,102 @@ def _build_trend_text(report: dict[str, object], previous: dict[str, object] | N
         _build_trend_item("SecMaster告警数量", report, previous, "secmaster_alerts"),
     ]
     if all(item["direction"] == "flat" for item in items):
-        return f"{comparison_reference}，各项核心攻击与告警指标整体持平，暂无明显波动。"
+        reason = _build_trend_reason_text(report, previous)
+        return f"{comparison_reference}，各项核心攻击与告警指标整体持平，暂无明显波动；{reason}。"
     phrases: list[str] = []
     for direction in ("down", "up", "flat"):
         direction_items = [item for item in items if item["direction"] == direction]
         phrases.extend(_render_trend_group(group) for group in _group_trend_items(direction_items))
-    return f"{comparison_reference}，{'，'.join(phrases)}，整体波动处于预期范围内。"
+    reason = _build_trend_reason_text(report, previous)
+    return f"{comparison_reference}，{'，'.join(phrases)}；{reason}。"
+
+
+def _change_direction(
+    report: dict[str, object],
+    previous: dict[str, object],
+    field: str,
+) -> str | None:
+    if field not in report or field not in previous:
+        return None
+    current = int(report.get(field, 0) or 0)
+    baseline = int(previous.get(field, 0) or 0)
+    if current > baseline:
+        return "up"
+    if current < baseline:
+        return "down"
+    return "flat"
+
+
+def _build_trend_reason_text(
+    report: dict[str, object],
+    previous: dict[str, object],
+) -> str:
+    attack_directions = {
+        direction
+        for field in ("waf_attacks", "cfw_attacks")
+        if (direction := _change_direction(report, previous, field)) != "flat"
+        and direction is not None
+    }
+    alert_directions = {
+        direction
+        for field in ("hss_alerts", "secmaster_alerts")
+        if (direction := _change_direction(report, previous, field)) != "flat"
+        and direction is not None
+    }
+    defense_directions = {
+        direction
+        for field in ("waf_blocked", "waf_ips_banned", "cfw_unblocked")
+        if (direction := _change_direction(report, previous, field)) != "flat"
+        and direction is not None
+    }
+    high_risk_directions = {
+        direction
+        for field in (
+            "hss_detail_fatal",
+            "hss_detail_high",
+            "secmaster_detail_fatal",
+            "secmaster_detail_high",
+        )
+        if (direction := _change_direction(report, previous, field)) != "flat"
+        and direction is not None
+    }
+
+    reasons: list[str] = []
+    if attack_directions == {"down"}:
+        evidence = "拦截、封禁及未阻断事件同步减少，" if defense_directions == {"down"} else ""
+        reasons.append(f"{evidence}初步判断可能与外部扫描及网络攻击活跃度下降有关")
+    elif attack_directions == {"up"}:
+        evidence = "拦截、封禁或未阻断事件同步增加，" if defense_directions == {"up"} else ""
+        reasons.append(f"{evidence}初步判断可能与外部扫描及网络攻击活跃度上升有关")
+    elif attack_directions == {"up", "down"}:
+        reasons.append("Web侧与网络边界攻击指标方向不一，可能反映不同攻击面的活跃度变化")
+
+    if alert_directions == {"down"}:
+        evidence = "高危及以上告警同步减少，" if high_risk_directions == {"down"} else ""
+        reasons.append(f"{evidence}初步判断可能与主机异常行为及高风险规则命中减少有关")
+    elif alert_directions == {"up"}:
+        evidence = "高危及以上告警同步增加，" if high_risk_directions == {"up"} else ""
+        reasons.append(f"{evidence}初步判断可能与主机异常行为或安全规则命中增加有关")
+    elif alert_directions == {"up", "down"}:
+        reasons.append("主机与态势感知告警方向不一，可能与不同安全规则的命中结构变化有关")
+
+    if not reasons:
+        return "现有指标未显示明确的变化驱动因素，具体原因暂无法确认，仍需结合攻击源、规则命中和业务变更信息进一步核实"
+    return "；".join(reasons) + "，具体原因仍需结合攻击源、规则命中和业务变更信息进一步核实"
+
+
+def _ensure_trend_reason_analysis(
+    text: str,
+    report: dict[str, object],
+    previous: dict[str, object] | None,
+) -> str:
+    if not previous:
+        return text
+    reason_markers = ("原因", "可能与", "由于", "受", "表明", "反映")
+    if any(marker in text for marker in reason_markers):
+        return text
+    normalized = text.rstrip("。； ")
+    return f"{normalized}；{_build_trend_reason_text(report, previous)}。"
 
 
 def _comparison_reference(

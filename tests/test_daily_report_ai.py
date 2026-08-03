@@ -13,20 +13,42 @@ class DailyReportAiTests(TestCase):
             "waf_attacks": 100,
             "waf_blocked": 90,
             "waf_ips_banned": 5,
+            "waf_qps_peak_value": 1500,
+            "waf_exceeded_spec": False,
             "cfw_attacks": 20,
             "cfw_unblocked": 1,
+            "cfw_inbound_peak": "120Mbps",
+            "cfw_inbound_95th": "80Mbps",
+            "cfw_exceeded_spec": False,
             "hss_alerts": 8,
+            "hss_detail_fatal": 0,
+            "hss_detail_high": 1,
+            "hss_detail_medium": 2,
+            "hss_detail_low": 5,
             "hss_unclosed_event_count": 2,
+            "hss_closed_loop_status": "高危告警已完成核查",
             "ddos_cleanings": 0,
             "ddos_blackholes": 0,
             "secmaster_alerts": 6,
+            "secmaster_detail_fatal": 0,
+            "secmaster_detail_high": 1,
+            "secmaster_detail_medium": 2,
+            "secmaster_detail_low": 2,
+            "secmaster_detail_info": 1,
             "secmaster_unclosed_event_count": 1,
         }
         self.previous = {
             "waf_attacks": 80,
+            "waf_blocked": 70,
+            "waf_ips_banned": 3,
             "cfw_attacks": 25,
+            "cfw_unblocked": 2,
             "hss_alerts": 10,
+            "hss_detail_fatal": 1,
+            "hss_detail_high": 2,
             "secmaster_alerts": 6,
+            "secmaster_detail_fatal": 0,
+            "secmaster_detail_high": 1,
         }
 
     def test_fallback_generation_returns_three_fields(self):
@@ -48,7 +70,7 @@ class DailyReportAiTests(TestCase):
     def test_llm_result_overrides_fallback_when_available(self):
         expected = {
             "business_stability": "模型生成的业务运行情况。",
-            "trend_comparison": "模型生成的趋势对比说明。",
+            "trend_comparison": "模型生成的趋势对比说明，可能与攻击活跃度变化有关。",
             "overall_assessment": "模型生成的总体评估。",
         }
         with patch("app.services.daily_report_ai.LLM_API_BASE_URL", "https://example.com/v1"), patch("app.services.daily_report_ai.LLM_API_KEY", "key"), patch("app.services.daily_report_ai.LLM_MODEL", "model"), patch("app.services.daily_report_ai._call_llm", return_value=expected):
@@ -63,7 +85,10 @@ class DailyReportAiTests(TestCase):
         self.assertIn("必须使用‘与昨日相比，’起句", prompt)
         self.assertIn("避免逐项罗列具体增减值", prompt)
         self.assertIn("正式、简洁、稳健", prompt)
-        self.assertIn("整体波动处于预期范围内", prompt)
+        self.assertIn("分析变化原因", prompt)
+        self.assertIn("原因只能依据所提供的辅助指标", prompt)
+        self.assertIn("具体原因暂无法确认", prompt)
+        self.assertIn('"hss_detail_high": 1', prompt)
 
     def test_prompt_includes_historical_style_examples(self):
         prompt = _build_prompt(self.report, self.previous, ("business_stability", "overall_assessment"))
@@ -74,10 +99,15 @@ class DailyReportAiTests(TestCase):
     def test_trend_fallback_uses_grouped_summary_style(self):
         text = _build_trend_text(self.report, self.previous)
 
-        self.assertEqual(
-            text,
-            "与昨日相比，CFW攻击数量、HSS告警数量均有所下降，WAF攻击数量有所上升，SecMaster告警数量基本持平，整体波动处于预期范围内。",
+        self.assertTrue(
+            text.startswith(
+                "与昨日相比，CFW攻击数量、HSS告警数量均有所下降，WAF攻击数量有所上升，SecMaster告警数量基本持平；"
+            )
         )
+        self.assertIn("不同攻击面的活跃度变化", text)
+        self.assertIn("主机异常行为及高风险规则命中减少", text)
+        self.assertIn("进一步核实", text)
+        self.assertNotIn("整体波动处于预期范围内", text)
 
     def test_trend_fallback_merges_metrics_with_similar_decline(self):
         report = {
@@ -96,10 +126,13 @@ class DailyReportAiTests(TestCase):
 
         text = _build_trend_text(report, previous)
 
-        self.assertEqual(
-            text,
-            "与昨日相比，WAF攻击数量、HSS告警数量均有所下降，SecMaster告警数量有所上升，CFW攻击数量基本持平，整体波动处于预期范围内。",
+        self.assertTrue(
+            text.startswith(
+                "与昨日相比，WAF攻击数量、HSS告警数量均有所下降，SecMaster告警数量有所上升，CFW攻击数量基本持平；"
+            )
         )
+        self.assertIn("外部扫描及网络攻击活跃度下降", text)
+        self.assertIn("不同安全规则的命中结构变化", text)
 
     def test_trend_fallback_uses_stable_phrase_when_all_metrics_flat(self):
         previous = {
@@ -111,7 +144,65 @@ class DailyReportAiTests(TestCase):
 
         text = _build_trend_text(self.report, previous)
 
-        self.assertEqual(text, "与昨日相比，各项核心攻击与告警指标整体持平，暂无明显波动。")
+        self.assertTrue(text.startswith("与昨日相比，各项核心攻击与告警指标整体持平，暂无明显波动；"))
+        self.assertIn("具体原因暂无法确认", text)
+
+    def test_trend_fallback_analyzes_reasons_when_all_metrics_decline(self):
+        report = {
+            **self.report,
+            "waf_attacks": 20,
+            "waf_blocked": 18,
+            "waf_ips_banned": 1,
+            "cfw_attacks": 5,
+            "cfw_unblocked": 0,
+            "hss_alerts": 2,
+            "hss_detail_fatal": 0,
+            "hss_detail_high": 0,
+            "secmaster_alerts": 1,
+            "secmaster_detail_fatal": 0,
+            "secmaster_detail_high": 0,
+        }
+        previous = {
+            **self.previous,
+            "report_date": "2026-07-31",
+            "waf_attacks": 100,
+            "waf_blocked": 90,
+            "waf_ips_banned": 8,
+            "cfw_attacks": 40,
+            "cfw_unblocked": 3,
+            "hss_alerts": 12,
+            "hss_detail_fatal": 1,
+            "hss_detail_high": 4,
+            "secmaster_alerts": 10,
+            "secmaster_detail_fatal": 1,
+            "secmaster_detail_high": 3,
+        }
+        report["report_date"] = "2026-08-03"
+
+        text = _build_trend_text(report, previous)
+
+        self.assertTrue(text.startswith("与7月31日相比，"))
+        self.assertIn("外部扫描及网络攻击活跃度下降", text)
+        self.assertIn("主机异常行为及高风险规则命中减少", text)
+        self.assertIn("具体原因仍需结合攻击源、规则命中和业务变更信息进一步核实", text)
+
+    def test_llm_trend_without_reason_is_completed_with_reason_analysis(self):
+        expected = {
+            "trend_comparison": "与昨日相比，WAF、CFW、HSS及SecMaster指标均有所下降，整体波动处于预期范围内。",
+        }
+        with (
+            patch("app.services.daily_report_ai.LLM_API_BASE_URL", "https://example.com/v1"),
+            patch("app.services.daily_report_ai.LLM_API_KEY", "key"),
+            patch("app.services.daily_report_ai.LLM_MODEL", "model"),
+            patch("app.services.daily_report_ai._call_llm", return_value=expected),
+        ):
+            result = generate_top_section_text(
+                self.report,
+                self.previous,
+                fields=("trend_comparison",),
+            )
+
+        self.assertIn("具体原因仍需结合攻击源、规则命中和业务变更信息进一步核实", result["trend_comparison"])
 
     def test_trend_uses_previous_report_date_after_non_working_days(self):
         report = {**self.report, "report_date": "2026-07-27"}
