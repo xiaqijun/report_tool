@@ -338,16 +338,19 @@ class DailyReportAiTests(TestCase):
             patch("app.services.daily_report_ai.get_effective_llm_settings", return_value={"enabled": False}),
         ):
             result = polish_trend_comparison_with_reasons(
-                "与昨日相比，WAF和SecMaster下降，CFW和HSS上升。",
+                "与昨日相比，WAF攻击数量和SecMaster告警数量均有所下降，CFW攻击数量和HSS告警数量有所上升。",
                 reason_groups,
                 fluctuations,
             )
 
         self.assertIn("本次CFW 云防火墙攻击数量异常是受互联网扫描行为增多影响", result)
-        self.assertIn("WAF攻击数量下降", result)
-        self.assertIn("HSS告警数量上升", result)
-        self.assertIn("SecMaster告警数量下降", result)
-        self.assertIn("具体原因仍需结合攻击源、规则命中和业务变更信息进一步核实", result)
+        self.assertIn("WAF攻击数量", result)
+        self.assertIn("HSS告警数量", result)
+        self.assertIn("SecMaster告警数量", result)
+        self.assertIn("均有所下降", result)
+        self.assertIn("有所上升", result)
+        self.assertIn("其余设备的攻击及告警数量波动均处于正常范围", result)
+        self.assertNotIn("进一步核实", result)
 
     def test_reason_polish_rejects_llm_text_that_omits_other_devices(self):
         reason_groups = [
@@ -367,12 +370,15 @@ class DailyReportAiTests(TestCase):
             patch("app.services.daily_report_ai._call_trend_reason_polish_llm", return_value=incomplete),
         ):
             result = polish_trend_comparison_with_reasons(
-                "与昨日相比，WAF和SecMaster下降，CFW和HSS上升。",
+                "与昨日相比，WAF攻击数量和SecMaster告警数量均有所下降，CFW攻击数量和HSS告警数量有所上升。",
                 reason_groups,
                 fluctuations,
             )
 
         self.assertNotEqual(result, incomplete)
-        self.assertIn("WAF攻击数量下降", result)
-        self.assertIn("HSS告警数量上升", result)
-        self.assertIn("SecMaster告警数量下降", result)
+        self.assertIn("WAF攻击数量", result)
+        self.assertIn("HSS告警数量", result)
+        self.assertIn("SecMaster告警数量", result)
+        self.assertIn("均有所下降", result)
+        self.assertIn("有所上升", result)
+        self.assertIn("其余设备的攻击及告警数量波动均处于正常范围", result)

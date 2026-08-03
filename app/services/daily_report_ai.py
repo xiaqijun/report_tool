@@ -243,15 +243,12 @@ def _build_reason_polish_fallback(
         reason = str(group["reason"])
         qualifier = "均是" if len(group["device_metrics"]) > 1 else "是"
         details.append(f"本次{metrics}异常{qualifier}受{reason}影响")
-    unconfirmed = [
-        f"{item['label']}{item['direction_text']}"
+    has_unconfirmed = any(
+        item["device_metric"] not in confirmed_metrics
         for item in fluctuations
-        if item["device_metric"] not in confirmed_metrics
-    ]
-    if unconfirmed:
-        details.append(
-            f"其余{'、'.join(unconfirmed)}的具体原因仍需结合攻击源、规则命中和业务变更信息进一步核实"
-        )
+    )
+    if has_unconfirmed:
+        details.append("其余设备的攻击及告警数量波动均处于正常范围")
     source = trend_comparison.strip().rstrip("。；; ")
     verified = "；".join(details) + "。"
     return f"{source}；{verified}" if source else verified
@@ -280,8 +277,9 @@ def _call_trend_reason_polish_llm(
                     "你是企业安全运营日报编辑。请将原趋势文案与运营人员核实的真实原因整合为一段正式成稿。"
                     "必须保留原文中的指标变化事实，不得改变上升、下降或持平结论；用户填写的原因属于已核实事实，"
                     "应替换对应设备原文中笼统的推测性原因。输出必须覆盖波动清单中的每个设备及其变化方向，"
-                    "不得因为运营人员只填写了某个设备的原因而省略其他设备。未填写原因的设备继续沿用原文研判；"
-                    "原文没有明确原因时，逐项说明具体原因仍需进一步核实。相同原因对应多个设备时必须合并表达，"
+                    "不得因为运营人员只填写了某个设备的原因而省略其他设备。未填写原因表示该设备变化处于正常范围，"
+                    "保留其变化方向后统一表述为‘其余设备的攻击及告警数量波动均处于正常范围’，不要写原因仍需核实。"
+                    "相同原因对应多个设备时必须合并表达，"
                     "使用‘本次……异常均是受……影响’句式。文字应简洁、连贯、书面化，不得编造新原因，不输出 Markdown。"
                     "请仅输出 JSON，格式为 {\"trend_comparison\": \"润色后的完整文案\"}。"
                 ),
