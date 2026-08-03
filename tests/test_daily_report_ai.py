@@ -82,7 +82,12 @@ class DailyReportAiTests(TestCase):
         with patch("app.services.daily_report_ai.LLM_API_BASE_URL", "https://example.com/v1"), patch("app.services.daily_report_ai.LLM_API_KEY", "key"), patch("app.services.daily_report_ai.LLM_MODEL", "model"), patch("app.services.daily_report_ai._call_llm", return_value=expected):
             result = generate_top_section_text(self.report, self.previous)
 
-        self.assertEqual(result, expected)
+        self.assertEqual(result["business_stability"], expected["business_stability"])
+        self.assertEqual(result["overall_assessment"], expected["overall_assessment"])
+        self.assertEqual(
+            result["trend_comparison"],
+            "模型生成的趋势对比说明；各设备的攻击及告警数量波动均处于正常范围。",
+        )
 
     def test_prompt_is_tightened_for_single_field_tone(self):
         prompt = _build_prompt(self.report, self.previous, ("trend_comparison",))
@@ -91,9 +96,10 @@ class DailyReportAiTests(TestCase):
         self.assertIn("必须使用‘与昨日相比，’起句", prompt)
         self.assertIn("避免逐项罗列具体增减值", prompt)
         self.assertIn("正式、简洁、稳健", prompt)
-        self.assertIn("分析变化原因", prompt)
-        self.assertIn("原因只能依据所提供的辅助指标", prompt)
-        self.assertIn("具体原因暂无法确认", prompt)
+        self.assertIn("人工未补充原因时，不分析或推测变化原因", prompt)
+        self.assertIn("各设备的攻击及告警数量波动均处于正常范围", prompt)
+        self.assertNotIn("具体原因暂无法确认", prompt)
+        self.assertIn("不得写‘原因暂无法确认’或‘进一步核实’", prompt)
         self.assertIn('"hss_detail_high": 1', prompt)
 
     def test_prompt_includes_historical_style_examples(self):
@@ -110,10 +116,8 @@ class DailyReportAiTests(TestCase):
                 "与昨日相比，CFW攻击数量、HSS告警数量均有所下降，WAF攻击数量有所上升，SecMaster告警数量基本持平；"
             )
         )
-        self.assertIn("不同攻击面的活跃度变化", text)
-        self.assertIn("主机异常行为及高风险规则命中减少", text)
-        self.assertIn("进一步核实", text)
-        self.assertNotIn("整体波动处于预期范围内", text)
+        self.assertIn("各设备的攻击及告警数量波动均处于正常范围", text)
+        self.assertNotIn("进一步核实", text)
 
     def test_trend_fallback_merges_metrics_with_similar_decline(self):
         report = {
@@ -137,8 +141,8 @@ class DailyReportAiTests(TestCase):
                 "与昨日相比，WAF攻击数量、HSS告警数量均有所下降，SecMaster告警数量有所上升，CFW攻击数量基本持平；"
             )
         )
-        self.assertIn("外部扫描及网络攻击活跃度下降", text)
-        self.assertIn("不同安全规则的命中结构变化", text)
+        self.assertIn("各设备的攻击及告警数量波动均处于正常范围", text)
+        self.assertNotIn("可能与", text)
 
     def test_trend_fallback_uses_stable_phrase_when_all_metrics_flat(self):
         previous = {
@@ -151,7 +155,8 @@ class DailyReportAiTests(TestCase):
         text = _build_trend_text(self.report, previous)
 
         self.assertTrue(text.startswith("与昨日相比，各项核心攻击与告警指标整体持平，暂无明显波动；"))
-        self.assertIn("具体原因暂无法确认", text)
+        self.assertIn("各设备的攻击及告警数量波动均处于正常范围", text)
+        self.assertNotIn("具体原因暂无法确认", text)
 
     def test_trend_fallback_analyzes_reasons_when_all_metrics_decline(self):
         report = {
@@ -188,9 +193,8 @@ class DailyReportAiTests(TestCase):
         text = _build_trend_text(report, previous)
 
         self.assertTrue(text.startswith("与7月31日相比，"))
-        self.assertIn("外部扫描及网络攻击活跃度下降", text)
-        self.assertIn("主机异常行为及高风险规则命中减少", text)
-        self.assertIn("具体原因仍需结合攻击源、规则命中和业务变更信息进一步核实", text)
+        self.assertIn("各设备的攻击及告警数量波动均处于正常范围", text)
+        self.assertNotIn("进一步核实", text)
 
     def test_llm_trend_without_reason_is_completed_with_reason_analysis(self):
         expected = {
@@ -208,7 +212,34 @@ class DailyReportAiTests(TestCase):
                 fields=("trend_comparison",),
             )
 
-        self.assertIn("具体原因仍需结合攻击源、规则命中和业务变更信息进一步核实", result["trend_comparison"])
+        self.assertIn("各设备的攻击及告警数量波动均处于正常范围", result["trend_comparison"])
+        self.assertNotIn("进一步核实", result["trend_comparison"])
+
+    def test_llm_unconfirmed_reason_is_replaced_with_normal_range(self):
+        expected = {
+            "trend_comparison": (
+                "与昨日相比，WAF攻击数量和SecMaster告警数量均有所上升，HSS告警数量有所下降，"
+                "CFW攻击数量基本持平；结合WAF和CFW均出现规格超限，初步判断可能与攻击流量整体增长有关，"
+                "具体原因暂无法确认，仍需进一步核实。"
+            ),
+        }
+        with (
+            patch("app.services.daily_report_ai.LLM_API_BASE_URL", "https://example.com/v1"),
+            patch("app.services.daily_report_ai.LLM_API_KEY", "key"),
+            patch("app.services.daily_report_ai.LLM_MODEL", "model"),
+            patch("app.services.daily_report_ai._call_llm", return_value=expected),
+        ):
+            result = generate_top_section_text(
+                self.report,
+                self.previous,
+                fields=("trend_comparison",),
+            )
+
+        text = result["trend_comparison"]
+        self.assertIn("WAF攻击数量和SecMaster告警数量均有所上升", text)
+        self.assertIn("各设备的攻击及告警数量波动均处于正常范围", text)
+        self.assertNotIn("初步判断", text)
+        self.assertNotIn("进一步核实", text)
 
     def test_trend_uses_previous_report_date_after_non_working_days(self):
         report = {**self.report, "report_date": "2026-07-27"}
