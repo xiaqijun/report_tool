@@ -258,6 +258,12 @@ export default function DailyReportPage() {
       const res = await api.post('/api/daily-report/polish-trend-reasons', {
         trend_comparison: currentTrend,
         reason_groups: groupedReasons,
+        fluctuations: trendFluctuations.map(item => ({
+          key: item.key,
+          name: item.name,
+          metric: item.metric,
+          direction: item.direction,
+        })),
       })
       const polished = String(res.data?.trend_comparison || '').trim()
       if (!polished) throw new Error('AI 润色结果为空')

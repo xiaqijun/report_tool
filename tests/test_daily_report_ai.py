@@ -320,3 +320,59 @@ class DailyReportAiTests(TestCase):
             result = polish_trend_comparison_with_reasons("原文。", reason_groups)
 
         self.assertEqual(result, expected)
+
+    def test_reason_polish_describes_devices_without_confirmed_reasons(self):
+        reason_groups = [
+            {"device_metrics": ["CFW 云防火墙攻击数量"], "reason": "互联网扫描行为增多"},
+        ]
+        fluctuations = [
+            {"key": "waf", "name": "WAF 应用防火墙", "metric": "攻击数量", "direction": "down"},
+            {"key": "cfw", "name": "CFW 云防火墙", "metric": "攻击数量", "direction": "up"},
+            {"key": "hss", "name": "HSS 主机安全", "metric": "告警数量", "direction": "up"},
+            {"key": "secmaster", "name": "SecMaster 态势感知", "metric": "告警数量", "direction": "down"},
+        ]
+        with (
+            patch("app.services.daily_report_ai.LLM_API_BASE_URL", ""),
+            patch("app.services.daily_report_ai.LLM_API_KEY", ""),
+            patch("app.services.daily_report_ai.LLM_MODEL", ""),
+            patch("app.services.daily_report_ai.get_effective_llm_settings", return_value={"enabled": False}),
+        ):
+            result = polish_trend_comparison_with_reasons(
+                "与昨日相比，WAF和SecMaster下降，CFW和HSS上升。",
+                reason_groups,
+                fluctuations,
+            )
+
+        self.assertIn("本次CFW 云防火墙攻击数量异常是受互联网扫描行为增多影响", result)
+        self.assertIn("WAF攻击数量下降", result)
+        self.assertIn("HSS告警数量上升", result)
+        self.assertIn("SecMaster告警数量下降", result)
+        self.assertIn("具体原因仍需结合攻击源、规则命中和业务变更信息进一步核实", result)
+
+    def test_reason_polish_rejects_llm_text_that_omits_other_devices(self):
+        reason_groups = [
+            {"device_metrics": ["CFW 云防火墙攻击数量"], "reason": "互联网扫描行为增多"},
+        ]
+        fluctuations = [
+            {"key": "waf", "name": "WAF 应用防火墙", "metric": "攻击数量", "direction": "down"},
+            {"key": "cfw", "name": "CFW 云防火墙", "metric": "攻击数量", "direction": "up"},
+            {"key": "hss", "name": "HSS 主机安全", "metric": "告警数量", "direction": "up"},
+            {"key": "secmaster", "name": "SecMaster 态势感知", "metric": "告警数量", "direction": "down"},
+        ]
+        incomplete = "本次CFW攻击数量上升是受互联网扫描行为增多影响。"
+        with (
+            patch("app.services.daily_report_ai.LLM_API_BASE_URL", "https://example.com/v1"),
+            patch("app.services.daily_report_ai.LLM_API_KEY", "key"),
+            patch("app.services.daily_report_ai.LLM_MODEL", "model"),
+            patch("app.services.daily_report_ai._call_trend_reason_polish_llm", return_value=incomplete),
+        ):
+            result = polish_trend_comparison_with_reasons(
+                "与昨日相比，WAF和SecMaster下降，CFW和HSS上升。",
+                reason_groups,
+                fluctuations,
+            )
+
+        self.assertNotEqual(result, incomplete)
+        self.assertIn("WAF攻击数量下降", result)
+        self.assertIn("HSS告警数量上升", result)
+        self.assertIn("SecMaster告警数量下降", result)

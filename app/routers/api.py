@@ -225,10 +225,15 @@ async def api_polish_trend_reasons(request: Request):
     body = await request.json()
     trend_comparison = str(body.get("trend_comparison", "") or "").strip()
     reason_groups = body.get("reason_groups", [])
-    if not isinstance(reason_groups, list):
+    fluctuations = body.get("fluctuations", [])
+    if not isinstance(reason_groups, list) or not isinstance(fluctuations, list):
         raise HTTPException(status_code=400, detail="波动原因格式错误")
 
-    polished = polish_trend_comparison_with_reasons(trend_comparison, reason_groups)
+    polished = polish_trend_comparison_with_reasons(
+        trend_comparison,
+        reason_groups,
+        fluctuations,
+    )
     return {"trend_comparison": polished}
 
 

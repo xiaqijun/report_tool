@@ -15,6 +15,13 @@ FLUCTUATION_METRICS = (
     ("secmaster", "SecMaster 态势感知", "告警数量", "secmaster_alerts"),
 )
 
+FLUCTUATION_KEY_LABELS = {
+    "waf": "WAF",
+    "cfw": "CFW",
+    "hss": "HSS",
+    "secmaster": "SecMaster",
+}
+
 FIELD_INSTRUCTIONS = {
     "business_stability": "业务运行情况：只写1句话，优先贴近历史成稿句式‘今日业务运行稳定，……，整体安全状态稳定。’；先写运行状态，再写是否存在主机入侵或核心异常，结尾落到‘整体安全状态稳定/平稳’，不要写趋势判断，不要出现‘总体来看’。",
     "trend_comparison": "趋势对比说明：只写1句话，必须使用‘与昨日相比，’起句；先比较WAF、CFW、HSS、SecMaster等核心指标的上升、下降或持平，再结合拦截/封禁/未阻断、QPS与带宽是否超限、告警等级分布、未闭环及闭环情况分析变化原因；原因必须使用‘初步判断’‘可能与’等审慎口径，不得把推测写成确定事实；若现有指标不足以支撑原因判断，必须明确写‘具体原因暂无法确认，仍需结合攻击源、规则命中和业务变更信息进一步核实’，不能只写‘整体波动处于预期范围内’；避免逐项罗列具体增减值，对同向且波动幅度接近的指标优先合并表述，无昨日数据时写‘与昨日相比，因缺少基线数据，暂无法开展趋势对比。’。",
@@ -127,14 +134,20 @@ def _safe_count(value: object) -> int:
 def polish_trend_comparison_with_reasons(
     trend_comparison: str,
     reason_groups: list[dict[str, object]],
+    fluctuations: list[dict[str, object]] | None = None,
 ) -> str:
     """Polish the generated trend paragraph with user-confirmed fluctuation reasons."""
     normalized_groups = _normalize_fluctuation_reason_groups(reason_groups)
+    normalized_fluctuations = _normalize_trend_fluctuations(fluctuations or [])
     source_text = str(trend_comparison or "").strip()
     if not normalized_groups:
         return source_text
 
-    fallback = _build_reason_polish_fallback(source_text, normalized_groups)
+    fallback = _build_reason_polish_fallback(
+        source_text,
+        normalized_groups,
+        normalized_fluctuations,
+    )
     if LLM_API_BASE_URL or LLM_API_KEY or LLM_MODEL:
         llm_settings = {
             "enabled": bool(LLM_API_BASE_URL and LLM_API_KEY and LLM_MODEL),
@@ -155,10 +168,17 @@ def polish_trend_comparison_with_reasons(
         return fallback
 
     try:
-        polished = _call_trend_reason_polish_llm(source_text, normalized_groups, llm_settings)
+        polished = _call_trend_reason_polish_llm(
+            source_text,
+            normalized_groups,
+            normalized_fluctuations,
+            llm_settings,
+        )
     except Exception:
         return fallback
-    return polished or fallback
+    if polished and _polished_text_covers_fluctuations(polished, normalized_fluctuations):
+        return polished
+    return fallback
 
 
 def _normalize_fluctuation_reason_groups(
@@ -185,24 +205,70 @@ def _normalize_fluctuation_reason_groups(
     ]
 
 
+def _normalize_trend_fluctuations(
+    fluctuations: list[dict[str, object]],
+) -> list[dict[str, str]]:
+    normalized: list[dict[str, str]] = []
+    for item in fluctuations:
+        if not isinstance(item, dict):
+            continue
+        key = str(item.get("key", "") or "").strip().lower()
+        direction = str(item.get("direction", "") or "").strip().lower()
+        metric = str(item.get("metric", "") or "").strip()
+        name = str(item.get("name", "") or "").strip()
+        if key not in FLUCTUATION_KEY_LABELS or direction not in {"up", "down"} or not metric:
+            continue
+        normalized.append(
+            {
+                "key": key,
+                "label": f"{FLUCTUATION_KEY_LABELS[key]}{metric}",
+                "device_metric": f"{name}{metric}" if name else f"{FLUCTUATION_KEY_LABELS[key]}{metric}",
+                "direction": direction,
+                "direction_text": "上升" if direction == "up" else "下降",
+            }
+        )
+    return normalized
+
+
 def _build_reason_polish_fallback(
     trend_comparison: str,
     reason_groups: list[dict[str, object]],
+    fluctuations: list[dict[str, str]],
 ) -> str:
     details: list[str] = []
+    confirmed_metrics: set[str] = set()
     for group in reason_groups:
         metrics = "、".join(str(metric) for metric in group["device_metrics"])
+        confirmed_metrics.update(str(metric) for metric in group["device_metrics"])
         reason = str(group["reason"])
         qualifier = "均是" if len(group["device_metrics"]) > 1 else "是"
         details.append(f"本次{metrics}异常{qualifier}受{reason}影响")
+    unconfirmed = [
+        f"{item['label']}{item['direction_text']}"
+        for item in fluctuations
+        if item["device_metric"] not in confirmed_metrics
+    ]
+    if unconfirmed:
+        details.append(
+            f"其余{'、'.join(unconfirmed)}的具体原因仍需结合攻击源、规则命中和业务变更信息进一步核实"
+        )
     source = trend_comparison.strip().rstrip("。；; ")
     verified = "；".join(details) + "。"
     return f"{source}；{verified}" if source else verified
 
 
+def _polished_text_covers_fluctuations(
+    text: str,
+    fluctuations: list[dict[str, str]],
+) -> bool:
+    lowered = text.lower()
+    return all(FLUCTUATION_KEY_LABELS[item["key"]].lower() in lowered for item in fluctuations)
+
+
 def _call_trend_reason_polish_llm(
     trend_comparison: str,
     reason_groups: list[dict[str, object]],
+    fluctuations: list[dict[str, str]],
     llm_settings: dict[str, object],
 ) -> str:
     payload = {
@@ -213,8 +279,10 @@ def _call_trend_reason_polish_llm(
                 "content": (
                     "你是企业安全运营日报编辑。请将原趋势文案与运营人员核实的真实原因整合为一段正式成稿。"
                     "必须保留原文中的指标变化事实，不得改变上升、下降或持平结论；用户填写的原因属于已核实事实，"
-                    "应替换原文中笼统的推测性原因。相同原因对应多个设备时必须合并表达，优先使用"
-                    "‘本次……异常均是受……影响’句式。文字应简洁、连贯、书面化，不得编造新原因，不输出 Markdown。"
+                    "应替换对应设备原文中笼统的推测性原因。输出必须覆盖波动清单中的每个设备及其变化方向，"
+                    "不得因为运营人员只填写了某个设备的原因而省略其他设备。未填写原因的设备继续沿用原文研判；"
+                    "原文没有明确原因时，逐项说明具体原因仍需进一步核实。相同原因对应多个设备时必须合并表达，"
+                    "使用‘本次……异常均是受……影响’句式。文字应简洁、连贯、书面化，不得编造新原因，不输出 Markdown。"
                     "请仅输出 JSON，格式为 {\"trend_comparison\": \"润色后的完整文案\"}。"
                 ),
             },
@@ -222,6 +290,8 @@ def _call_trend_reason_polish_llm(
                 "role": "user",
                 "content": (
                     f"原趋势文案：{trend_comparison}\n"
+                    "全部波动设备及方向："
+                    f"{json.dumps(fluctuations, ensure_ascii=False)}\n"
                     "已核实的波动原因："
                     f"{json.dumps(reason_groups, ensure_ascii=False)}"
                 ),
