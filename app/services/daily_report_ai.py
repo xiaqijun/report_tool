@@ -30,7 +30,7 @@ FIELD_INSTRUCTIONS = {
 
 STYLE_EXAMPLES = {
     "business_stability": "今日业务运行稳定，无主机入侵事件，整体安全状态稳定。",
-    "trend_comparison": "与昨日相比，WAF攻击数量、HSS告警数量均有所下降，SecMaster告警数量有所上升，CFW攻击数量基本持平；各设备的攻击及告警数量波动均处于正常范围。",
+    "trend_comparison": "与昨日相比，WAF攻击数量、HSS告警数量均有所下降，SecMaster告警数量有所上升，CFW攻击数量基本持平，各设备的攻击及告警数量波动均处于正常范围。",
     "overall_assessment": "总体来看，整体安全态势保持平稳可控。",
 }
 
@@ -493,13 +493,13 @@ def _build_trend_text(report: dict[str, object], previous: dict[str, object] | N
     ]
     if all(item["direction"] == "flat" for item in items):
         reason = _build_trend_reason_text(report, previous)
-        return f"{comparison_reference}，各项核心攻击与告警指标整体持平，暂无明显波动；{reason}。"
+        return f"{comparison_reference}，各项核心攻击与告警指标整体持平，暂无明显波动，{reason}。"
     phrases: list[str] = []
     for direction in ("down", "up", "flat"):
         direction_items = [item for item in items if item["direction"] == direction]
         phrases.extend(_render_trend_group(group) for group in _group_trend_items(direction_items))
     reason = _build_trend_reason_text(report, previous)
-    return f"{comparison_reference}，{'，'.join(phrases)}；{reason}。"
+    return f"{comparison_reference}，{'，'.join(phrases)}，{reason}。"
 
 
 def _build_trend_reason_text(
@@ -523,7 +523,7 @@ def _ensure_trend_reason_analysis(
             break
     if not normalized:
         return _build_trend_text(report, previous)
-    return f"{normalized}；{_build_trend_reason_text(report, previous)}。"
+    return f"{normalized}，{_build_trend_reason_text(report, previous)}。"
 
 
 def _comparison_reference(

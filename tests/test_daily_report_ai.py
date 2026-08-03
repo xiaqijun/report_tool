@@ -86,7 +86,7 @@ class DailyReportAiTests(TestCase):
         self.assertEqual(result["overall_assessment"], expected["overall_assessment"])
         self.assertEqual(
             result["trend_comparison"],
-            "模型生成的趋势对比说明；各设备的攻击及告警数量波动均处于正常范围。",
+            "模型生成的趋势对比说明，各设备的攻击及告警数量波动均处于正常范围。",
         )
 
     def test_prompt_is_tightened_for_single_field_tone(self):
@@ -113,7 +113,7 @@ class DailyReportAiTests(TestCase):
 
         self.assertTrue(
             text.startswith(
-                "与昨日相比，CFW攻击数量、HSS告警数量均有所下降，WAF攻击数量有所上升，SecMaster告警数量基本持平；"
+                "与昨日相比，CFW攻击数量、HSS告警数量均有所下降，WAF攻击数量有所上升，SecMaster告警数量基本持平，"
             )
         )
         self.assertIn("各设备的攻击及告警数量波动均处于正常范围", text)
@@ -138,7 +138,7 @@ class DailyReportAiTests(TestCase):
 
         self.assertTrue(
             text.startswith(
-                "与昨日相比，WAF攻击数量、HSS告警数量均有所下降，SecMaster告警数量有所上升，CFW攻击数量基本持平；"
+                "与昨日相比，WAF攻击数量、HSS告警数量均有所下降，SecMaster告警数量有所上升，CFW攻击数量基本持平，"
             )
         )
         self.assertIn("各设备的攻击及告警数量波动均处于正常范围", text)
@@ -154,7 +154,7 @@ class DailyReportAiTests(TestCase):
 
         text = _build_trend_text(self.report, previous)
 
-        self.assertTrue(text.startswith("与昨日相比，各项核心攻击与告警指标整体持平，暂无明显波动；"))
+        self.assertTrue(text.startswith("与昨日相比，各项核心攻击与告警指标整体持平，暂无明显波动，"))
         self.assertIn("各设备的攻击及告警数量波动均处于正常范围", text)
         self.assertNotIn("具体原因暂无法确认", text)
 
@@ -237,7 +237,9 @@ class DailyReportAiTests(TestCase):
 
         text = result["trend_comparison"]
         self.assertIn("WAF攻击数量和SecMaster告警数量均有所上升", text)
+        self.assertIn("CFW攻击数量基本持平，各设备的攻击及告警数量波动均处于正常范围", text)
         self.assertIn("各设备的攻击及告警数量波动均处于正常范围", text)
+        self.assertNotIn("；各设备", text)
         self.assertNotIn("初步判断", text)
         self.assertNotIn("进一步核实", text)
 
