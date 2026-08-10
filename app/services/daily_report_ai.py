@@ -517,13 +517,16 @@ def _ensure_trend_reason_analysis(
     if not previous:
         return text
     normalized = text.strip().rstrip("。；; ")
+    normal_range_text = _build_trend_reason_text(report, previous)
+    if normal_range_text in normalized:
+        normalized = normalized.split(normal_range_text, 1)[0].rstrip("，。；; ")
     for marker in ("；", ";", "，结合", "，初步判断", "，可能与", "，具体原因"):
         if marker in normalized:
             normalized = normalized.split(marker, 1)[0].rstrip("，。；; ")
             break
     if not normalized:
         return _build_trend_text(report, previous)
-    return f"{normalized}，{_build_trend_reason_text(report, previous)}。"
+    return f"{normalized}，{normal_range_text}。"
 
 
 def _comparison_reference(

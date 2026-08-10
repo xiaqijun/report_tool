@@ -243,6 +243,30 @@ class DailyReportAiTests(TestCase):
         self.assertNotIn("初步判断", text)
         self.assertNotIn("进一步核实", text)
 
+    def test_llm_duplicate_normal_range_is_deduplicated(self):
+        normal_range = "各设备的攻击及告警数量波动均处于正常范围"
+        expected = {
+            "trend_comparison": (
+                "与8月7日相比，WAF攻击数量、SecMaster告警数量均有所下降，HSS告警数量有所上升，"
+                f"CFW攻击数量基本持平，{normal_range}，{normal_range}。"
+            ),
+        }
+        with (
+            patch("app.services.daily_report_ai.LLM_API_BASE_URL", "https://example.com/v1"),
+            patch("app.services.daily_report_ai.LLM_API_KEY", "key"),
+            patch("app.services.daily_report_ai.LLM_MODEL", "model"),
+            patch("app.services.daily_report_ai._call_llm", return_value=expected),
+        ):
+            result = generate_top_section_text(
+                self.report,
+                {**self.previous, "report_date": "2026-08-07"},
+                fields=("trend_comparison",),
+            )
+
+        text = result["trend_comparison"]
+        self.assertEqual(text.count(normal_range), 1)
+        self.assertTrue(text.endswith(f"，{normal_range}。"))
+
     def test_trend_uses_previous_report_date_after_non_working_days(self):
         report = {**self.report, "report_date": "2026-07-27"}
         previous = {**self.previous, "report_date": "2026-07-24"}
