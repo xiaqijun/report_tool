@@ -437,17 +437,6 @@ export default function DailyReportPage() {
             <DatePicker value={reportDate} onChange={v => { if (!v) return; updateReportDate(formatReportDate(v)) }} style={{ width: 150 }} />
           </div>
         </div>
-        <SectionCard n={1} title="总体安全态势">
-          <div className="ai-row">
-            <Button type="tertiary" size="small" icon={<IconAIStrokedLevel1 />} loading={aiGenerating} onClick={handleAiGenerate}>
-              AI 生成态势文案
-            </Button>
-          </div>
-          <Form.TextArea field="business_stability" label="业务运行情况" rows={2} placeholder="今日业务运行稳定，各系统运转正常…" />
-          <Form.TextArea field="trend_comparison" label="趋势对比说明" rows={3} placeholder="较昨日趋势相比较，WAF、CFW拦截数量有所上升…" />
-          <Form.TextArea field="overall_assessment" label="总体评估" rows={2} placeholder="总体来看，今日安全态势平稳可控…" />
-        </SectionCard>
-
         <SectionCard n={2} title="安全监控">
           <div className="dr-time-row">
             <Row gutter={16}>
@@ -551,6 +540,17 @@ export default function DailyReportPage() {
             </SectionCard>
           </Col>
         </Row>
+
+        <SectionCard n={1} title="总体安全态势">
+          <div className="ai-row">
+            <Button type="tertiary" size="small" icon={<IconAIStrokedLevel1 />} loading={aiGenerating} onClick={handleAiGenerate}>
+              AI 生成态势文案
+            </Button>
+          </div>
+          <Form.TextArea field="business_stability" label="业务运行情况" rows={2} placeholder="今日业务运行稳定，各系统运转正常…" />
+          <Form.TextArea field="trend_comparison" label="趋势对比说明" rows={3} placeholder="较昨日趋势相比较，WAF、CFW拦截数量有所上升…" />
+          <Form.TextArea field="overall_assessment" label="总体评估" rows={2} placeholder="总体来看，今日安全态势平稳可控…" />
+        </SectionCard>
 
         <div className="dr-submit">
           <div className="dr-submit-btns">
