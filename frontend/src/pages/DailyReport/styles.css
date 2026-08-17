@@ -446,9 +446,19 @@
 }
 .dr-submit-btns {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 12px;
 }
+.auto-save-status {
+  min-width: 118px;
+  color: #8491a3;
+  font-size: 12px;
+  text-align: right;
+}
+.auto-save-status.saving { color: #2563eb; }
+.auto-save-status.saved { color: #16825d; }
+.auto-save-status.error { color: #c52222; }
 .dr-submit .semi-button {
   min-width: 140px;
   border-radius: 12px !important;

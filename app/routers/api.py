@@ -270,8 +270,12 @@ async def api_save_daily_report(request: Request):
         v = str(data.get(key, '')).lower()
         data[key] = 1 if v == 'true' else 0 if v == 'false' else int(data.get(key, 0) or 0)
 
+    auto_save = str(data.pop("auto_save", "")).lower() in {"1", "true", "yes"}
     report_date = data.pop("report_date", "") or date.today().isoformat()
     db.save_daily_report(report_date, data, user.get("display_name") or user.get("username", "admin"))
+
+    if auto_save:
+        return {"success": True, "auto_saved": True}
 
     # Generate DOCX and PDF in background for preview
     try:

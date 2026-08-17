@@ -157,10 +157,35 @@ function SectionCard({ n, title, children }: { n: number; title: string; childre
 export default function DailyReportPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [loading, setLoading] = useState(false)
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [lastAutoSavedAt, setLastAutoSavedAt] = useState<Date | null>(null)
   const [formApi, setFormApi] = useState<any>(null)
   const today = new Date().toISOString().slice(0, 10)
   const [screenshotPaths, setScreenshotPaths] = useState<Record<string, string>>({})
   const reportDate = searchParams.get('date') || today
+  const dataLoadedRef = useRef(false)
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const autoSaveInFlightRef = useRef(false)
+  const autoSaveQueuedRef = useRef(false)
+  const latestValuesRef = useRef<Record<string, any>>({})
+  const screenshotPathsRef = useRef<Record<string, string>>({})
+  const reportDateRef = useRef(reportDate)
+
+  useEffect(() => {
+    reportDateRef.current = reportDate
+    dataLoadedRef.current = false
+    autoSaveQueuedRef.current = false
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current)
+      autoSaveTimerRef.current = null
+    }
+    setAutoSaveStatus('idle')
+    setLastAutoSavedAt(null)
+  }, [reportDate])
+
+  useEffect(() => () => {
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+  }, [])
 
   useEffect(() => { if (formApi) fetchData() }, [formApi, reportDate])
 
@@ -194,7 +219,10 @@ export default function DailyReportPage() {
         }
       }
       setScreenshotPaths(paths)
+      screenshotPathsRef.current = paths
+      latestValuesRef.current = values
       formApi.setValues(values)
+      dataLoadedRef.current = true
     } catch { Toast.error('获取日报数据失败') }
   }
 
@@ -204,7 +232,8 @@ export default function DailyReportPage() {
   const [fluctuationReasons, setFluctuationReasons] = useState<Record<string, string>>({})
   const [reasonPolishing, setReasonPolishing] = useState(false)
   const updateScreenshotPath = useCallback((field: string, path: string) => {
-    setScreenshotPaths((prev) => ({ ...prev, [field]: path }))
+    screenshotPathsRef.current = { ...screenshotPathsRef.current, [field]: path }
+    setScreenshotPaths(screenshotPathsRef.current)
   }, [])
 
   const handleAiGenerate = async () => {
@@ -282,17 +311,66 @@ export default function DailyReportPage() {
     return `${item.percent.toLocaleString('zh-CN', { maximumFractionDigits: 1 })}%`
   }
 
+  const buildSaveFormData = useCallback((values: any, autoSave = false) => {
+    const fd = new FormData()
+    const payload = { ...screenshotPathsRef.current, ...values }
+    for (const [k, v] of Object.entries(payload)) {
+      if (v !== undefined && v !== null) fd.append(k, v instanceof File ? v : String(v))
+    }
+    fd.append('report_date', reportDateRef.current)
+    if (autoSave) fd.append('auto_save', '1')
+    return fd
+  }, [])
+
+  const saveAutomatically = useCallback(async (values: Record<string, any>) => {
+    if (!dataLoadedRef.current) return
+    const targetDate = reportDateRef.current
+    if (autoSaveInFlightRef.current) {
+      autoSaveQueuedRef.current = true
+      return
+    }
+    autoSaveInFlightRef.current = true
+    autoSaveQueuedRef.current = false
+    setAutoSaveStatus('saving')
+    try {
+      await api.post('/api/daily-report/save', buildSaveFormData(values, true))
+      if (reportDateRef.current === targetDate) {
+        setAutoSaveStatus('saved')
+        setLastAutoSavedAt(new Date())
+      }
+    } catch {
+      setAutoSaveStatus('error')
+    } finally {
+      autoSaveInFlightRef.current = false
+      if (autoSaveQueuedRef.current && dataLoadedRef.current) {
+        autoSaveQueuedRef.current = false
+        void saveAutomatically(latestValuesRef.current)
+      }
+    }
+  }, [buildSaveFormData])
+
+  const scheduleAutoSave = useCallback((values: Record<string, any>) => {
+    latestValuesRef.current = values
+    if (!dataLoadedRef.current) return
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+    autoSaveTimerRef.current = setTimeout(() => {
+      autoSaveTimerRef.current = null
+      void saveAutomatically(latestValuesRef.current)
+    }, 1200)
+  }, [saveAutomatically])
+
   const handleSubmit = async (values: any) => {
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current)
+      autoSaveTimerRef.current = null
+    }
+    autoSaveQueuedRef.current = false
     setLoading(true)
     try {
-      const fd = new FormData()
-      const payload = { ...screenshotPaths, ...values }
-      for (const [k, v] of Object.entries(payload)) {
-        if (v !== undefined && v !== null) fd.append(k, v instanceof File ? v : String(v))
-      }
-      fd.append('report_date', reportDate)
-      await api.post('/api/daily-report/save', fd)
+      await api.post('/api/daily-report/save', buildSaveFormData(values))
       Toast.success('保存成功')
+      setAutoSaveStatus('saved')
+      setLastAutoSavedAt(new Date())
     } catch { Toast.error('保存失败') }
     finally { setLoading(false) }
   }
@@ -348,7 +426,11 @@ export default function DailyReportPage() {
           ))}
         </div>
       </Modal>
-      <Form onSubmit={handleSubmit} getFormApi={setFormApi}>
+      <Form
+        onSubmit={handleSubmit}
+        onValueChange={(values: Record<string, any>) => scheduleAutoSave(values)}
+        getFormApi={setFormApi}
+      >
         <div className="dr-header">
           <div className="dr-header-right">
             <span className="dr-header-label">日报日期</span>
@@ -472,6 +554,13 @@ export default function DailyReportPage() {
 
         <div className="dr-submit">
           <div className="dr-submit-btns">
+            {autoSaveStatus !== 'idle' && (
+              <span className={`auto-save-status ${autoSaveStatus}`} aria-live="polite">
+                {autoSaveStatus === 'saving' && '正在自动保存...'}
+                {autoSaveStatus === 'saved' && `已自动保存${lastAutoSavedAt ? ` ${lastAutoSavedAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}` : ''}`}
+                {autoSaveStatus === 'error' && '自动保存失败'}
+              </span>
+            )}
             <Button theme="light" size="large" icon={<IconEyeOpened />} style={{ borderRadius: 12 }} onClick={() => navigate(`/daily-report/preview?date=${reportDate}`)}>
               预览日报
             </Button>
