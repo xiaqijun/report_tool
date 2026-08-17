@@ -254,7 +254,8 @@
   max-width: 130px;
 }
 .dr-prod .semi-input.dr-input-peak-range-cfw {
-  max-width: 185px;
+  width: 100%;
+  max-width: 240px;
 }
 .dr-prod .semi-input-number .semi-input {
   font-variant-numeric: tabular-nums;
