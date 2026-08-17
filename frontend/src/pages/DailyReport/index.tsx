@@ -454,7 +454,7 @@ export default function DailyReportPage() {
               <Col span={8}><Form.InputNumber field="waf_ips_banned" label="封禁IP个数" /></Col>
             </Row>
             <Row gutter={16} style={{ marginTop: 12 }}>
-              <Col span={8}><Form.Input field="waf_qps_specs" label="QPS 规格" placeholder="85,000（云模式专业版45000+40个QPS扩展包）" /></Col>
+              <Col span={8}><Form.Input field="waf_qps_specs" label="QPS 规格" placeholder="85,000（云模式专业版45000+40个QPS扩展包）" className="dr-input-qps-specs" /></Col>
               <Col span={8}><Form.Input field="waf_qps_peak_range" label="峰值时间段" placeholder="如：16:55-18:00" className="dr-input-peak-range dr-input-peak-range-waf" /></Col>
               <Col span={8}><Form.InputNumber field="waf_qps_peak_value" label="峰值" /></Col>
             </Row>

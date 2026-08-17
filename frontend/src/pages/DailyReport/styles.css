@@ -253,6 +253,10 @@
 .dr-prod .semi-input.dr-input-peak-range-waf {
   max-width: 130px;
 }
+.dr-prod .semi-input.dr-input-qps-specs {
+  width: 100%;
+  max-width: 320px;
+}
 .dr-prod .semi-input.dr-input-peak-range-cfw {
   width: 100%;
   max-width: 240px;
