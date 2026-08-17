@@ -250,14 +250,17 @@
 .dr-prod .semi-input {
   max-width: 170px;
 }
-.dr-prod .semi-input.dr-input-peak-range-waf {
+.dr-prod .dr-input-peak-range-waf,
+.dr-prod .dr-input-peak-range-waf .semi-input {
   max-width: 130px;
 }
-.dr-prod .semi-input.dr-input-qps-specs {
+.dr-prod .dr-input-qps-specs,
+.dr-prod .dr-input-qps-specs .semi-input {
   width: 100%;
   max-width: 320px;
 }
-.dr-prod .semi-input.dr-input-peak-range-cfw {
+.dr-prod .dr-input-peak-range-cfw,
+.dr-prod .dr-input-peak-range-cfw .semi-input {
   width: 100%;
   max-width: 240px;
 }
