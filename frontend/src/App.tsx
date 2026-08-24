@@ -14,6 +14,7 @@ import AdminPage from './pages/Admin'
 import ChangePasswordPage from './pages/ChangePassword'
 import IpQueryPage from './pages/Tools/IpQuery'
 import TableMergePage from './pages/Tools/TableMerge'
+import VulnerabilityHistoryPage from './pages/Tools/VulnerabilityHistory'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
@@ -82,6 +83,7 @@ export default function App() {
         <Route path="admin/:datasetKey" element={<AdminPage />} />
         <Route path="tools/ip-query" element={<IpQueryPage />} />
         <Route path="tools/table-merge" element={<TableMergePage />} />
+        <Route path="tools/table-merge/history" element={<VulnerabilityHistoryPage />} />
         <Route path="change-password" element={<ChangePasswordPage />} />
       </Route>
     </Routes>

@@ -40,7 +40,7 @@ export default function MainLayout() {
 
   const isDailyReport = location.pathname.startsWith('/daily-report')
   const isTools = location.pathname.startsWith('/tools')
-  const isVulnerabilityManagement = location.pathname === '/tools/table-merge'
+  const isVulnerabilityManagement = location.pathname.startsWith('/tools/table-merge')
   const currentModule = isVulnerabilityManagement
     ? '漏洞管理'
     : (isTools ? '富强专用工具' : (isDailyReport ? '安全日报' : '主机预警'))
@@ -85,6 +85,7 @@ export default function MainLayout() {
       icon: <IconShieldStroked />,
       items: [
         { itemKey: '/tools/table-merge', text: '漏洞数据处理', icon: <IconFile /> },
+        { itemKey: '/tools/table-merge/history', text: '处理历史', icon: <IconHistory /> },
       ],
     },
     {

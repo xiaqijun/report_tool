@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, DragEvent } from 'react'
 import { Button, InputNumber, Modal, Spin, Tag, TextArea, Toast } from '@douyinfe/semi-ui'
 import IconClose from '@douyinfe/semi-icons/lib/es/icons/IconClose'
 import IconDownload from '@douyinfe/semi-icons/lib/es/icons/IconDownload'
 import IconFile from '@douyinfe/semi-icons/lib/es/icons/IconFile'
 import IconMail from '@douyinfe/semi-icons/lib/es/icons/IconMail'
-import IconDelete from '@douyinfe/semi-icons/lib/es/icons/IconDelete'
 import IconTickCircle from '@douyinfe/semi-icons/lib/es/icons/IconTickCircle'
 import IconUpload from '@douyinfe/semi-icons/lib/es/icons/IconUpload'
 import api from '../../../api'
@@ -42,15 +41,6 @@ interface ArchivePart {
   size: number
   index: number
   download_url: string
-}
-
-interface VulnerabilityHistory {
-  job_id: string
-  created_at: string
-  source_file_names: string[]
-  output_filename: string
-  operator_name: string
-  stats: VulnerabilityStats
 }
 
 interface FileBucketProps {
@@ -164,8 +154,6 @@ export default function TableMergePage() {
   const [processing, setProcessing] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const [vulnerabilityResult, setVulnerabilityResult] = useState<ProcessResult<VulnerabilityStats> | null>(null)
-  const [history, setHistory] = useState<VulnerabilityHistory[]>([])
-  const [historyLoading, setHistoryLoading] = useState(false)
   const [archiveVisible, setArchiveVisible] = useState(false)
   const [archiveLoading, setArchiveLoading] = useState(false)
   const [archiveJobId, setArchiveJobId] = useState('')
@@ -196,20 +184,6 @@ export default function TableMergePage() {
     timerRef.current = null
   }
 
-  const fetchHistory = async () => {
-    setHistoryLoading(true)
-    try {
-      const response = await api.get('/api/tools/vulnerability-history', { params: { page: 1 } })
-      setHistory(response.data.records || [])
-    } catch {
-      Toast.error('获取漏洞处理历史失败')
-    } finally {
-      setHistoryLoading(false)
-    }
-  }
-
-  useEffect(() => { fetchHistory() }, [])
-
   const processVulnerabilityFiles = async () => {
     if (!hssFiles.length || !elbFiles.length) {
       Toast.warning('请同时选择 HSS 漏洞报告和 ELB 表格')
@@ -229,7 +203,6 @@ export default function TableMergePage() {
         { timeout: 0 },
       )
       setVulnerabilityResult(response.data)
-      await fetchHistory()
       Toast.success('最终漏洞报告已生成')
     } catch (error: any) {
       Toast.error(error?.response?.data?.detail || error?.message || '漏洞报告处理失败')
@@ -294,16 +267,6 @@ export default function TableMergePage() {
       Toast.error(error?.response?.data?.detail || '邮件发送失败')
     } finally {
       setEmailSending(false)
-    }
-  }
-
-  const deleteHistory = async (jobId: string) => {
-    try {
-      await api.delete(`/api/tools/vulnerability-history/${jobId}`)
-      setHistory(current => current.filter(item => item.job_id !== jobId))
-      Toast.success('历史记录已删除')
-    } catch {
-      Toast.error('删除历史记录失败')
     }
   }
 
@@ -451,37 +414,6 @@ export default function TableMergePage() {
           </div>
         </section>
       )}
-
-      <section className="vulnerability-history">
-        <div className="history-heading">
-          <div>
-            <span>PROCESS HISTORY</span>
-            <strong>漏洞处理历史</strong>
-          </div>
-          <Button size="small" loading={historyLoading} onClick={fetchHistory}>刷新</Button>
-        </div>
-        {historyLoading && history.length === 0 ? <Spin /> : history.length === 0 ? (
-          <div className="history-empty">暂无漏洞处理记录</div>
-        ) : (
-          <div className="history-list">
-            {history.map(record => (
-              <div className="history-row" key={record.job_id}>
-                <div className="history-main">
-                  <strong>{record.output_filename}</strong>
-                  <span>{record.created_at} · {record.operator_name} · 输出 {record.stats?.rows_written?.toLocaleString?.() || 0} 行</span>
-                  <small title={record.source_file_names.join('、')}>{record.source_file_names.join('、')}</small>
-                </div>
-                <div className="history-actions">
-                  <Button size="small" icon={<IconDownload />} onClick={() => window.open(`/api/tools/vulnerability-process/${record.job_id}/download`)}>下载</Button>
-                  <Button size="small" icon={<IconFile />} onClick={() => handleArchive(record.job_id)}>分卷压缩</Button>
-                  <Button size="small" icon={<IconMail />} onClick={() => openEmail(record.job_id)}>发送邮件</Button>
-                  <Button size="small" type="danger" icon={<IconDelete />} onClick={() => deleteHistory(record.job_id)}>删除</Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
 
       <Modal
         title="压缩分卷"
