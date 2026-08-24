@@ -201,7 +201,7 @@ class VulnerabilityProcessingApiTests(TestCase):
                 Path(response.path),
                 export_dir / "vulnerability-tools" / result["job_id"] / "result.xlsx",
             )
-            self.assertIn("HSS漏洞主机报告_最终_", result["filename"])
+            self.assertRegex(result["filename"], r"^比亚迪项目主机安全体检报告_\d{4}年\d{1,2}月\.xlsx$")
 
             workbook = load_workbook(response.path, read_only=True, data_only=True)
             try:

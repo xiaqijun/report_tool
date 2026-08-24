@@ -1393,7 +1393,8 @@ async def api_vulnerability_process(
             for level in remove_risk_levels.replace("，", ",").split(",")
             if level.strip()
         ]
-        download_name = f"HSS漏洞主机报告_最终_{datetime.now():%Y%m%d_%H%M%S}.xlsx"
+        now = datetime.now()
+        download_name = f"比亚迪项目主机安全体检报告_{now.year}年{now.month}月.xlsx"
         output_path = job_dir / "result.xlsx"
         stats = await run_in_threadpool(
             process_vulnerability_files,
@@ -1459,10 +1460,10 @@ async def api_download_vulnerability_result(request: Request, job_id: str):
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         download_name = Path(
-            str(manifest.get("download_name") or "HSS漏洞主机报告_最终.xlsx")
+            str(manifest.get("download_name") or "比亚迪项目主机安全体检报告.xlsx")
         ).name
     except (OSError, ValueError):
-        download_name = "HSS漏洞主机报告_最终.xlsx"
+        download_name = "比亚迪项目主机安全体检报告.xlsx"
     return FileResponse(
         path=output_path,
         filename=download_name,
@@ -1508,11 +1509,17 @@ async def api_archive_vulnerability_result(request: Request, job_id: str, part_s
     from ..services.vulnerability_archive import create_split_archive, normalize_part_size_mb
 
     try:
+        manifest_path = job_dir / "manifest.json"
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            archive_stem = Path(str(manifest.get("download_name") or "比亚迪项目主机安全体检报告.xlsx")).stem
+        except (OSError, ValueError):
+            archive_stem = "比亚迪项目主机安全体检报告"
         parts = await run_in_threadpool(
             create_split_archive,
             output_path,
             job_dir / "archives",
-            f"HSS漏洞主机报告_{job_id}",
+            archive_stem,
             part_size_mb=normalize_part_size_mb(part_size_mb),
         )
     except Exception as error:
@@ -1567,11 +1574,12 @@ async def api_send_vulnerability_email(request: Request, job_id: str, body: Vuln
 
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        archive_stem = Path(str(manifest.get("download_name") or "比亚迪项目主机安全体检报告.xlsx")).stem
         parts = await run_in_threadpool(
             create_split_archive,
             output_path,
             job_dir / "archives",
-            f"HSS漏洞主机报告_{job_id}",
+            archive_stem,
             part_size_mb=normalize_part_size_mb(body.part_size_mb),
         )
         email_settings = db.get_email_settings() or {}
