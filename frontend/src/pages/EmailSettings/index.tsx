@@ -97,6 +97,11 @@ export default function EmailSettingsPage() {
             label="安全日报邮件主题"
             placeholder="【安全运营日报】{date}"
           />
+          <Form.Input
+            field="vulnerability_subject"
+            label="漏洞管理邮件主题"
+            placeholder="漏洞主机报告 - {date}"
+          />
           <Form.Input field="default_subject" label="默认邮件主题" placeholder="安全运营日报" />
         </Card>
 

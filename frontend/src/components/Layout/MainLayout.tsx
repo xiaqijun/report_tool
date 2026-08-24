@@ -85,7 +85,7 @@ export default function MainLayout() {
       icon: <IconShieldStroked />,
       items: [
         { itemKey: '/tools/table-merge', text: '漏洞数据处理', icon: <IconFile /> },
-        { itemKey: '/tools/table-merge/history', text: '处理历史', icon: <IconHistory /> },
+        { itemKey: '/tools/table-merge/history', text: '历史记录', icon: <IconHistory /> },
       ],
     },
     {

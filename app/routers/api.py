@@ -1579,11 +1579,21 @@ async def api_send_vulnerability_email(request: Request, job_id: str, body: Vuln
             raise ValueError("邮件服务未配置，请先在系统设置中配置SMTP")
         filename = str(manifest.get("download_name") or "漏洞主机报告.xlsx")
         sent = 0
+        created_at = str(manifest.get("created_at") or "")
+        try:
+            date_display = datetime.fromisoformat(created_at).strftime("%Y年%m月%d日")
+        except ValueError:
+            date_display = datetime.now().strftime("%Y年%m月%d日")
+        subject_template = str(email_settings.get("vulnerability_subject") or "").strip()
         for part in parts:
+            if subject_template:
+                subject = subject_template.replace("{date}", date_display).replace("{filename}", filename).replace("{part}", str(part["index"])).replace("{total}", str(len(parts)))
+            else:
+                subject = f"漏洞主机报告（分卷 {part['index']}/{len(parts)}） - {filename}"
             result = await run_in_threadpool(
                 send_email,
                 to_list,
-                f"漏洞主机报告（分卷 {part['index']}/{len(parts)}） - {filename}",
+                subject,
                 f"<p>漏洞主机报告已生成，本邮件为第 {part['index']} / {len(parts)} 个压缩分卷。</p><p>请下载全部分卷后按压缩包内说明合并解压。</p>",
                 cc_list,
                 [{"filename": str(part["name"]), "path": Path(str(part["path"]))}],
