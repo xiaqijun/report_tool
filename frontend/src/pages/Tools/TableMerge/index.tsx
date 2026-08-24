@@ -1,9 +1,11 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, DragEvent } from 'react'
-import { Button, Spin, Tag, Toast } from '@douyinfe/semi-ui'
+import { Button, InputNumber, Modal, Spin, Tag, TextArea, Toast } from '@douyinfe/semi-ui'
 import IconClose from '@douyinfe/semi-icons/lib/es/icons/IconClose'
 import IconDownload from '@douyinfe/semi-icons/lib/es/icons/IconDownload'
 import IconFile from '@douyinfe/semi-icons/lib/es/icons/IconFile'
+import IconMail from '@douyinfe/semi-icons/lib/es/icons/IconMail'
+import IconDelete from '@douyinfe/semi-icons/lib/es/icons/IconDelete'
 import IconTickCircle from '@douyinfe/semi-icons/lib/es/icons/IconTickCircle'
 import IconUpload from '@douyinfe/semi-icons/lib/es/icons/IconUpload'
 import api from '../../../api'
@@ -33,6 +35,22 @@ interface ProcessResult<T> {
   filename: string
   download_url: string
   stats: T
+}
+
+interface ArchivePart {
+  name: string
+  size: number
+  index: number
+  download_url: string
+}
+
+interface VulnerabilityHistory {
+  job_id: string
+  created_at: string
+  source_file_names: string[]
+  output_filename: string
+  operator_name: string
+  stats: VulnerabilityStats
 }
 
 interface FileBucketProps {
@@ -146,6 +164,19 @@ export default function TableMergePage() {
   const [processing, setProcessing] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const [vulnerabilityResult, setVulnerabilityResult] = useState<ProcessResult<VulnerabilityStats> | null>(null)
+  const [history, setHistory] = useState<VulnerabilityHistory[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [archiveVisible, setArchiveVisible] = useState(false)
+  const [archiveLoading, setArchiveLoading] = useState(false)
+  const [archiveJobId, setArchiveJobId] = useState('')
+  const [archiveSizeMb, setArchiveSizeMb] = useState(15)
+  const [archiveParts, setArchiveParts] = useState<ArchivePart[]>([])
+  const [emailVisible, setEmailVisible] = useState(false)
+  const [emailSending, setEmailSending] = useState(false)
+  const [emailJobId, setEmailJobId] = useState('')
+  const [emailPartSizeMb, setEmailPartSizeMb] = useState(15)
+  const [emailTo, setEmailTo] = useState('')
+  const [emailCc, setEmailCc] = useState('')
 
   const currentFileCount = hssFiles.length + elbFiles.length
   const totalBytes = useMemo(
@@ -164,6 +195,20 @@ export default function TableMergePage() {
     if (timerRef.current) clearInterval(timerRef.current)
     timerRef.current = null
   }
+
+  const fetchHistory = async () => {
+    setHistoryLoading(true)
+    try {
+      const response = await api.get('/api/tools/vulnerability-history', { params: { page: 1 } })
+      setHistory(response.data.records || [])
+    } catch {
+      Toast.error('获取漏洞处理历史失败')
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  useEffect(() => { fetchHistory() }, [])
 
   const processVulnerabilityFiles = async () => {
     if (!hssFiles.length || !elbFiles.length) {
@@ -184,11 +229,81 @@ export default function TableMergePage() {
         { timeout: 0 },
       )
       setVulnerabilityResult(response.data)
+      await fetchHistory()
       Toast.success('最终漏洞报告已生成')
     } catch (error: any) {
       Toast.error(error?.response?.data?.detail || error?.message || '漏洞报告处理失败')
     } finally {
       stopTimer()
+    }
+  }
+
+  const handleArchive = async (jobId: string) => {
+    setArchiveJobId(jobId)
+    setArchiveParts([])
+    setArchiveVisible(true)
+    setArchiveLoading(true)
+    try {
+      const form = new FormData()
+      form.append('part_size_mb', String(archiveSizeMb))
+      const response = await api.post<{ parts: ArchivePart[] }>('/api/tools/vulnerability-process/' + jobId + '/archive', form)
+      setArchiveParts(response.data.parts || [])
+      Toast.success(`已生成 ${response.data.parts?.length || 0} 个压缩分卷`)
+    } catch (error: any) {
+      Toast.error(error?.response?.data?.detail || '压缩分卷失败')
+    } finally {
+      setArchiveLoading(false)
+    }
+  }
+
+  const parseEmails = (value: string) => value
+    .split(/[,;，；\n]+/)
+    .map(item => item.trim())
+    .filter(item => item && item.includes('@'))
+
+  const openEmail = async (jobId: string) => {
+    setEmailJobId(jobId)
+    setEmailVisible(true)
+    try {
+      const response = await api.get('/api/email/settings')
+      const settings = response.data.settings || {}
+      setEmailTo(settings.default_to_list || '')
+      setEmailCc(settings.default_cc_list || '')
+    } catch {
+      setEmailTo('')
+      setEmailCc('')
+    }
+  }
+
+  const sendEmail = async () => {
+    const toList = parseEmails(emailTo)
+    if (!toList.length) {
+      Toast.warning('请至少输入一个收件人')
+      return
+    }
+    setEmailSending(true)
+    try {
+      const response = await api.post(`/api/tools/vulnerability-process/${emailJobId}/send-email`, {
+        to_list: toList,
+        cc_list: parseEmails(emailCc),
+        part_size_mb: emailPartSizeMb,
+      })
+      Toast.success(response.data.message || '邮件已发送')
+      setEmailVisible(false)
+    } catch (error: any) {
+      Toast.error(error?.response?.data?.detail || '邮件发送失败')
+    } finally {
+      setEmailSending(false)
+    }
+  }
+
+  const deleteHistory = async (jobId: string) => {
+    try {
+      await api.delete(`/api/tools/vulnerability-history/${jobId}`)
+      setHistory(current => current.filter(item => item.job_id !== jobId))
+      Toast.success('历史记录已删除')
+    } catch {
+      Toast.error('删除历史记录失败')
     }
   }
 
@@ -309,6 +424,12 @@ export default function TableMergePage() {
             >
               下载最终报告
             </Button>
+            <Button icon={<IconFile />} onClick={() => handleArchive(vulnerabilityResult.job_id)}>
+              压缩分卷
+            </Button>
+            <Button icon={<IconMail />} onClick={() => openEmail(vulnerabilityResult.job_id)}>
+              发送邮件
+            </Button>
           </div>
           <div className="result-metrics result-metrics-six">
             <div><span>HSS 读取</span><strong>{vulnerabilityResult.stats.hss_rows_read.toLocaleString()}</strong></div>
@@ -330,6 +451,90 @@ export default function TableMergePage() {
           </div>
         </section>
       )}
+
+      <section className="vulnerability-history">
+        <div className="history-heading">
+          <div>
+            <span>PROCESS HISTORY</span>
+            <strong>漏洞处理历史</strong>
+          </div>
+          <Button size="small" loading={historyLoading} onClick={fetchHistory}>刷新</Button>
+        </div>
+        {historyLoading && history.length === 0 ? <Spin /> : history.length === 0 ? (
+          <div className="history-empty">暂无漏洞处理记录</div>
+        ) : (
+          <div className="history-list">
+            {history.map(record => (
+              <div className="history-row" key={record.job_id}>
+                <div className="history-main">
+                  <strong>{record.output_filename}</strong>
+                  <span>{record.created_at} · {record.operator_name} · 输出 {record.stats?.rows_written?.toLocaleString?.() || 0} 行</span>
+                  <small title={record.source_file_names.join('、')}>{record.source_file_names.join('、')}</small>
+                </div>
+                <div className="history-actions">
+                  <Button size="small" icon={<IconDownload />} onClick={() => window.open(`/api/tools/vulnerability-process/${record.job_id}/download`)}>下载</Button>
+                  <Button size="small" icon={<IconFile />} onClick={() => handleArchive(record.job_id)}>分卷压缩</Button>
+                  <Button size="small" icon={<IconMail />} onClick={() => openEmail(record.job_id)}>发送邮件</Button>
+                  <Button size="small" type="danger" icon={<IconDelete />} onClick={() => deleteHistory(record.job_id)}>删除</Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <Modal
+        title="压缩分卷"
+        visible={archiveVisible}
+        onCancel={() => setArchiveVisible(false)}
+        footer={null}
+        width={620}
+      >
+        <div className="archive-settings">
+          <span>单个分卷大小（MB）</span>
+          <InputNumber min={1} max={20} value={archiveSizeMb} onChange={value => setArchiveSizeMb(Number(value) || 15)} />
+          <Button type="primary" loading={archiveLoading} onClick={() => handleArchive(archiveJobId)}>重新生成</Button>
+        </div>
+        <p className="archive-hint">建议使用 15 MB，邮件发送时会按分卷逐封发送，避免单封附件超过限制。</p>
+        {archiveParts.length > 0 && (
+          <div className="archive-parts">
+            {archiveParts.map(part => (
+              <div className="archive-part" key={part.index}>
+                <span>{part.name}</span>
+                <em>{formatBytes(part.size)}</em>
+                <Button size="small" icon={<IconDownload />} onClick={() => window.open(part.download_url)}>下载</Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        title="发送漏洞报告邮件"
+        visible={emailVisible}
+        onCancel={() => setEmailVisible(false)}
+        footer={
+          <div className="email-modal-actions">
+            <Button onClick={() => setEmailVisible(false)}>取消</Button>
+            <Button type="primary" loading={emailSending} icon={<IconMail />} onClick={sendEmail}>发送</Button>
+          </div>
+        }
+        width={640}
+      >
+        <div className="email-field">
+          <label>收件人</label>
+          <TextArea rows={3} value={emailTo} onChange={setEmailTo} placeholder="多个邮箱用逗号、分号或换行分隔" />
+        </div>
+        <div className="email-field">
+          <label>抄送（可选）</label>
+          <TextArea rows={2} value={emailCc} onChange={setEmailCc} placeholder="多个邮箱用逗号、分号或换行分隔" />
+        </div>
+        <div className="email-field email-size-field">
+          <label>单封附件分卷大小（MB）</label>
+          <InputNumber min={1} max={20} value={emailPartSizeMb} onChange={value => setEmailPartSizeMb(Number(value) || 15)} />
+          <span>系统会按分卷逐封发送</span>
+        </div>
+      </Modal>
 
     </div>
   )

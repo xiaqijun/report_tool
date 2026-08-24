@@ -38,6 +38,12 @@ class TencentDocsSettingsRequest(BaseModel):
     target_document_url: str = ""
 
 
+class VulnerabilityEmailRequest(BaseModel):
+    to_list: list[str] = []
+    cc_list: list[str] = []
+    part_size_mb: int = 15
+
+
 @router.post("/login")
 async def api_login(request: Request, body: LoginRequest):
     """Login endpoint for React frontend."""
@@ -1407,6 +1413,18 @@ async def api_vulnerability_process(
             json.dumps(manifest, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+        try:
+            db.create_vulnerability_history(
+                job_id,
+                [*(upload.filename or "未命名文件" for upload in hss_files), *(upload.filename or "未命名文件" for upload in elb_files)],
+                download_name,
+                str(output_path),
+                stats,
+                user.get("display_name") or user.get("username", ""),
+            )
+        except Exception:
+            # Keep the generated result available if the optional history write is unavailable.
+            pass
         return {
             "job_id": job_id,
             "filename": download_name,
@@ -1450,6 +1468,135 @@ async def api_download_vulnerability_result(request: Request, job_id: str):
         filename=download_name,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
+
+
+def _vulnerability_job_dir(job_id: str) -> Path:
+    if not re.fullmatch(r"[0-9a-f]{24}", job_id):
+        raise HTTPException(status_code=404, detail="结果不存在")
+    return EXPORT_DIR / "vulnerability-tools" / job_id
+
+
+@router.get("/tools/vulnerability-history")
+async def api_vulnerability_history(request: Request, q: str = "", page: int = 1):
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+    records, total = db.list_vulnerability_histories(search=q, page=page)
+    return {"records": records, "page": page, "total": total}
+
+
+@router.delete("/tools/vulnerability-history/{job_id}")
+async def api_delete_vulnerability_history(request: Request, job_id: str):
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+    _vulnerability_job_dir(job_id)
+    db.delete_vulnerability_history(job_id)
+    shutil.rmtree(EXPORT_DIR / "vulnerability-tools" / job_id, ignore_errors=True)
+    return {"success": True}
+
+
+@router.post("/tools/vulnerability-process/{job_id}/archive")
+async def api_archive_vulnerability_result(request: Request, job_id: str, part_size_mb: int = Form(15)):
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+    job_dir = _vulnerability_job_dir(job_id)
+    output_path = job_dir / "result.xlsx"
+    if not output_path.exists():
+        raise HTTPException(status_code=404, detail="结果不存在或已清理")
+    from ..services.vulnerability_archive import create_split_archive, normalize_part_size_mb
+
+    try:
+        parts = await run_in_threadpool(
+            create_split_archive,
+            output_path,
+            job_dir / "archives",
+            f"HSS漏洞主机报告_{job_id}",
+            part_size_mb=normalize_part_size_mb(part_size_mb),
+        )
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=f"压缩分卷失败：{error}") from error
+    return {
+        "success": True,
+        "part_size_mb": normalize_part_size_mb(part_size_mb),
+        "parts": [
+            {
+                "name": part["name"],
+                "size": part["size"],
+                "index": part["index"],
+                "download_url": f"/api/tools/vulnerability-process/{job_id}/archive/{part['index']}",
+            }
+            for part in parts
+        ],
+    }
+
+
+@router.get("/tools/vulnerability-process/{job_id}/archive/{part_index}")
+async def api_download_vulnerability_archive_part(request: Request, job_id: str, part_index: int):
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+    if part_index < 1 or part_index > 9999:
+        raise HTTPException(status_code=404, detail="分卷不存在")
+    job_dir = _vulnerability_job_dir(job_id)
+    candidates = sorted((job_dir / "archives").glob(f"*.zip.{part_index:03d}"))
+    if not candidates:
+        raise HTTPException(status_code=404, detail="分卷不存在，请先生成压缩分卷")
+    part_path = candidates[0]
+    return FileResponse(path=part_path, filename=part_path.name, media_type="application/octet-stream")
+
+
+@router.post("/tools/vulnerability-process/{job_id}/send-email")
+async def api_send_vulnerability_email(request: Request, job_id: str, body: VulnerabilityEmailRequest):
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+    to_list = [str(item).strip() for item in body.to_list if str(item).strip()]
+    cc_list = [str(item).strip() for item in body.cc_list if str(item).strip()]
+    if not to_list:
+        raise HTTPException(status_code=400, detail="收件人不能为空")
+    job_dir = _vulnerability_job_dir(job_id)
+    output_path = job_dir / "result.xlsx"
+    manifest_path = job_dir / "manifest.json"
+    if not output_path.exists() or not manifest_path.exists():
+        raise HTTPException(status_code=404, detail="结果不存在或已清理")
+
+    from ..services.vulnerability_archive import create_split_archive, normalize_part_size_mb
+    from ..services.email_service import send_email
+
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        parts = await run_in_threadpool(
+            create_split_archive,
+            output_path,
+            job_dir / "archives",
+            f"HSS漏洞主机报告_{job_id}",
+            part_size_mb=normalize_part_size_mb(body.part_size_mb),
+        )
+        email_settings = db.get_email_settings() or {}
+        if not email_settings.get("smtp_host"):
+            raise ValueError("邮件服务未配置，请先在系统设置中配置SMTP")
+        filename = str(manifest.get("download_name") or "漏洞主机报告.xlsx")
+        sent = 0
+        for part in parts:
+            result = await run_in_threadpool(
+                send_email,
+                to_list,
+                f"漏洞主机报告（分卷 {part['index']}/{len(parts)}） - {filename}",
+                f"<p>漏洞主机报告已生成，本邮件为第 {part['index']} / {len(parts)} 个压缩分卷。</p><p>请下载全部分卷后按压缩包内说明合并解压。</p>",
+                cc_list,
+                [{"filename": str(part["name"]), "path": Path(str(part["path"]))}],
+                email_settings,
+            )
+            if not result.get("success"):
+                raise ValueError(str(result.get("message") or "邮件发送失败"))
+            sent += 1
+        return {"success": True, "message": f"已发送 {sent} 封邮件，每封包含一个压缩分卷", "parts": len(parts)}
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
 
 @router.post("/tools/ip-query")

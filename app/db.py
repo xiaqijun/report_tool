@@ -307,6 +307,17 @@ def init_db() -> None:
                 setting_value LONGTEXT NOT NULL,
                 updated_at VARCHAR(32) NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS vulnerability_histories (
+                id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                job_id VARCHAR(64) NOT NULL UNIQUE,
+                source_file_names LONGTEXT NOT NULL,
+                output_filename VARCHAR(255) NOT NULL,
+                output_path TEXT NOT NULL,
+                stats_json LONGTEXT NOT NULL,
+                operator_name VARCHAR(255) NOT NULL,
+                created_at VARCHAR(32) NOT NULL
+            );
             """
         )
         _ensure_column(connection, "result_histories", "online_unprotected_path", "TEXT NULL")
@@ -591,6 +602,81 @@ def update_result_history_tencent_docs(
 def delete_result_history(batch_code: str) -> None:
     with get_connection() as connection:
         connection.execute("DELETE FROM result_histories WHERE batch_code = ?", (batch_code,))
+
+
+def create_vulnerability_history(
+    job_id: str,
+    source_file_names: list[str],
+    output_filename: str,
+    output_path: str,
+    stats: dict[str, object],
+    operator_name: str,
+) -> None:
+    with get_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO vulnerability_histories (
+                job_id, source_file_names, output_filename, output_path,
+                stats_json, operator_name, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                job_id,
+                json.dumps(source_file_names, ensure_ascii=False),
+                output_filename,
+                output_path,
+                json.dumps(stats, ensure_ascii=False),
+                operator_name,
+                datetime.now().isoformat(timespec="seconds"),
+            ),
+        )
+
+
+def _decode_vulnerability_history(row: dict[str, object]) -> dict[str, object]:
+    result = dict(row)
+    try:
+        result["source_file_names"] = json.loads(str(result.get("source_file_names") or "[]"))
+    except (TypeError, ValueError):
+        result["source_file_names"] = []
+    try:
+        result["stats"] = json.loads(str(result.get("stats_json") or "{}"))
+    except (TypeError, ValueError):
+        result["stats"] = {}
+    result.pop("stats_json", None)
+    return result
+
+
+def list_vulnerability_histories(search: str = "", page: int = 1, page_size: int = 20) -> tuple[list[dict[str, object]], int]:
+    parameters: list[object] = []
+    where_clause = ""
+    if search.strip():
+        like_value = f"%{search.strip()}%"
+        where_clause = " WHERE source_file_names LIKE ? OR output_filename LIKE ? OR operator_name LIKE ? OR job_id LIKE ? OR created_at LIKE ?"
+        parameters.extend([like_value] * 5)
+    offset = max(0, page - 1) * page_size
+    with get_connection() as connection:
+        total = connection.execute(
+            f"SELECT COUNT(*) AS total FROM vulnerability_histories{where_clause}",
+            tuple(parameters),
+        ).fetchone()["total"]
+        rows = connection.execute(
+            f"SELECT * FROM vulnerability_histories{where_clause} ORDER BY id DESC LIMIT ? OFFSET ?",
+            tuple(parameters + [page_size, offset]),
+        ).fetchall()
+    return [_decode_vulnerability_history(row) for row in rows], int(total)
+
+
+def get_vulnerability_history(job_id: str) -> dict[str, object] | None:
+    with get_connection() as connection:
+        row = connection.execute(
+            "SELECT * FROM vulnerability_histories WHERE job_id = ?", (job_id,)
+        ).fetchone()
+    return _decode_vulnerability_history(row) if row else None
+
+
+def delete_vulnerability_history(job_id: str) -> None:
+    with get_connection() as connection:
+        connection.execute("DELETE FROM vulnerability_histories WHERE job_id = ?", (job_id,))
 
 
 def _ensure_column(connection: MySQLConnection, table_name: str, column_name: str, column_definition: str) -> None:
