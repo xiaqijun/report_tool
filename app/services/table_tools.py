@@ -204,6 +204,23 @@ def _verify_vulnerability_output(
         workbook.close()
 
 
+def _repack_xlsx_with_max_compression(path: Path) -> None:
+    """Repack the XLSX ZIP container at the highest compatible ZIP level."""
+    compressed_path = path.with_name(f"{path.stem}.compressed{path.suffix}")
+    try:
+        with zipfile.ZipFile(path, "r") as source, zipfile.ZipFile(
+            compressed_path,
+            "w",
+            compression=zipfile.ZIP_DEFLATED,
+            compresslevel=9,
+        ) as target:
+            for info in source.infolist():
+                target.writestr(info, source.read(info.filename))
+        os.replace(compressed_path, path)
+    finally:
+        compressed_path.unlink(missing_ok=True)
+
+
 def process_vulnerability_files(
     hss_inputs: Sequence[TableInput],
     elb_inputs: Sequence[TableInput],
@@ -400,6 +417,7 @@ def process_vulnerability_files(
                 partial_path.unlink()
             raise
 
+    _repack_xlsx_with_max_compression(partial_path)
     _verify_vulnerability_output(partial_path, output_headers, rows_written)
     os.replace(partial_path, output_path)
     return {
