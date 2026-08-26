@@ -157,7 +157,7 @@ export default function TableMergePage() {
   const [archiveVisible, setArchiveVisible] = useState(false)
   const [archiveLoading, setArchiveLoading] = useState(false)
   const [archiveJobId, setArchiveJobId] = useState('')
-  const [archiveSizeMb, setArchiveSizeMb] = useState(15)
+  const [archiveSizeMb, setArchiveSizeMb] = useState(20)
   const [archiveParts, setArchiveParts] = useState<ArchivePart[]>([])
   const [emailVisible, setEmailVisible] = useState(false)
   const [emailSending, setEmailSending] = useState(false)
@@ -219,6 +219,7 @@ export default function TableMergePage() {
     try {
       const form = new FormData()
       form.append('part_size_mb', String(archiveSizeMb))
+      form.append('archive_format', 'zip_lzma')
       const response = await api.post<{ parts: ArchivePart[] }>('/api/tools/vulnerability-process/' + jobId + '/archive', form)
       setArchiveParts(response.data.parts || [])
       Toast.success(`已生成 ${response.data.parts?.length || 0} 个压缩分卷`)
@@ -424,10 +425,10 @@ export default function TableMergePage() {
       >
         <div className="archive-settings">
           <span>单个分卷大小（MB）</span>
-          <InputNumber min={1} max={20} value={archiveSizeMb} onChange={value => setArchiveSizeMb(Number(value) || 15)} />
+          <InputNumber min={1} max={20} value={archiveSizeMb} onChange={value => setArchiveSizeMb(Number(value) || 20)} />
           <Button type="primary" loading={archiveLoading} onClick={() => handleArchive(archiveJobId)}>重新生成</Button>
         </div>
-        <p className="archive-hint">建议使用 15 MB，邮件发送时会按分卷逐封发送，避免单封附件超过限制。</p>
+        <p className="archive-hint">使用 ZIP-LZMA 最高压缩率，默认按 20MB 分卷。下载全部分卷后按编号顺序合并，再解压 ZIP。</p>
         {archiveParts.length > 0 && (
           <div className="archive-parts">
             {archiveParts.map(part => (

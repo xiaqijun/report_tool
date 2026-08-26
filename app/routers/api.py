@@ -41,8 +41,8 @@ class TencentDocsSettingsRequest(BaseModel):
 class VulnerabilityEmailRequest(BaseModel):
     to_list: list[str] = []
     cc_list: list[str] = []
-    part_size_mb: int = 15
-    archive_format: str = "csv_gzip"
+    part_size_mb: int = 20
+    archive_format: str = "zip_lzma"
 
 
 @router.post("/login")
@@ -1502,8 +1502,8 @@ async def api_delete_vulnerability_history(request: Request, job_id: str):
 async def api_archive_vulnerability_result(
     request: Request,
     job_id: str,
-    part_size_mb: int = Form(15),
-    archive_format: str = Form("csv_gzip"),
+    part_size_mb: int = Form(20),
+    archive_format: str = Form("zip_lzma"),
 ):
     user = require_login(request)
     if not isinstance(user, dict):
@@ -1527,7 +1527,7 @@ async def api_archive_vulnerability_result(
             job_dir / "archives",
             archive_stem,
             part_size_mb=normalize_part_size_mb(part_size_mb),
-            archive_format="csv_gzip" if archive_format == "csv_gzip" else "zip",
+            archive_format="zip_lzma" if archive_format == "zip_lzma" else ("csv_gzip" if archive_format == "csv_gzip" else "zip"),
         )
     except Exception as error:
         raise HTTPException(status_code=500, detail=f"压缩分卷失败：{error}") from error
@@ -1590,7 +1590,7 @@ async def api_send_vulnerability_email(request: Request, job_id: str, body: Vuln
             job_dir / "archives",
             archive_stem,
             part_size_mb=normalize_part_size_mb(body.part_size_mb),
-            archive_format="csv_gzip" if body.archive_format == "csv_gzip" else "zip",
+            archive_format="zip_lzma" if body.archive_format == "zip_lzma" else ("csv_gzip" if body.archive_format == "csv_gzip" else "zip"),
         )
         email_settings = db.get_email_settings() or {}
         if not email_settings.get("smtp_host"):
