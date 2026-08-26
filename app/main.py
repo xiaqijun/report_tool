@@ -78,7 +78,7 @@ def create_app() -> FastAPI:
         @app.get("/")
         async def serve_react_root():
             """Serve React frontend for root path."""
-            return FileResponse(REACT_DIR / "index.html")
+            return FileResponse(REACT_DIR / "index.html", headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
         # Catch-all route to serve React index.html for SPA routing
         @app.get("/{path:path}")
@@ -94,7 +94,7 @@ def create_app() -> FastAPI:
             if path.startswith("download/"):
                 raise HTTPException(status_code=404, detail="Not found")
             # Serve React index.html
-            return FileResponse(REACT_DIR / "index.html")
+            return FileResponse(REACT_DIR / "index.html", headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
     return app
 
