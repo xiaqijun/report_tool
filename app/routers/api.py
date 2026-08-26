@@ -1512,51 +1512,89 @@ async def api_archive_vulnerability_result(
     output_path = job_dir / "result.xlsx"
     if not output_path.exists():
         raise HTTPException(status_code=404, detail="结果不存在或已清理")
-    from ..services.vulnerability_archive import create_split_archive, normalize_part_size_mb
+    from ..services.vulnerability_archive_jobs import archive_directory, request_archive
 
+    manifest_path = job_dir / "manifest.json"
     try:
-        manifest_path = job_dir / "manifest.json"
-        try:
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            archive_stem = Path(str(manifest.get("download_name") or "比亚迪项目主机安全体检报告.xlsx")).stem
-        except (OSError, ValueError):
-            archive_stem = "比亚迪项目主机安全体检报告"
-        parts = await run_in_threadpool(
-            create_split_archive,
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        archive_stem = Path(str(manifest.get("download_name") or "比亚迪项目主机安全体检报告.xlsx")).stem
+    except (OSError, ValueError):
+        archive_stem = "比亚迪项目主机安全体检报告"
+    normalized_format = "zip_lzma" if archive_format == "zip_lzma" else ("csv_gzip" if archive_format == "csv_gzip" else "zip")
+    try:
+        archive_dir = archive_directory(job_dir / "archives", part_size_mb, normalized_format)
+        result = request_archive(
+            job_id,
             output_path,
-            job_dir / "archives",
+            archive_dir,
             archive_stem,
-            part_size_mb=normalize_part_size_mb(part_size_mb),
-            archive_format="zip_lzma" if archive_format == "zip_lzma" else ("csv_gzip" if archive_format == "csv_gzip" else "zip"),
+            part_size_mb=part_size_mb,
+            archive_format=normalized_format,
         )
     except Exception as error:
         raise HTTPException(status_code=500, detail=f"压缩分卷失败：{error}") from error
-    return {
-        "success": True,
-        "part_size_mb": normalize_part_size_mb(part_size_mb),
-        "parts": [
-            {
-                "name": part["name"],
-                "size": part["size"],
-                "index": part["index"],
-                "download_url": f"/api/tools/vulnerability-process/{job_id}/archive/{part['index']}",
-            }
-            for part in parts
-        ],
-    }
+    return {"success": True, **result}
+
+
+@router.get("/tools/vulnerability-process/{job_id}/archive/status")
+async def api_vulnerability_archive_status(
+    request: Request,
+    job_id: str,
+    part_size_mb: int = 20,
+    archive_format: str = "zip_lzma",
+):
+    user = require_login(request)
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="未登录")
+    job_dir = _vulnerability_job_dir(job_id)
+    output_path = job_dir / "result.xlsx"
+    if not output_path.exists():
+        raise HTTPException(status_code=404, detail="结果不存在或已清理")
+    from ..services.vulnerability_archive_jobs import archive_directory, archive_status
+
+    manifest_path = job_dir / "manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        archive_stem = Path(str(manifest.get("download_name") or "比亚迪项目主机安全体检报告.xlsx")).stem
+    except (OSError, ValueError):
+        archive_stem = "比亚迪项目主机安全体检报告"
+    normalized_format = "zip_lzma" if archive_format == "zip_lzma" else ("csv_gzip" if archive_format == "csv_gzip" else "zip")
+    archive_dir = archive_directory(job_dir / "archives", part_size_mb, normalized_format)
+    result = archive_status(
+        job_id,
+        output_path,
+        archive_dir,
+        part_size_mb=part_size_mb,
+        archive_format=normalized_format,
+    )
+    return {"success": True, **result}
 
 
 @router.get("/tools/vulnerability-process/{job_id}/archive/{part_index}")
-async def api_download_vulnerability_archive_part(request: Request, job_id: str, part_index: int):
+async def api_download_vulnerability_archive_part(
+    request: Request,
+    job_id: str,
+    part_index: int,
+    part_size_mb: int = 20,
+    archive_format: str = "zip_lzma",
+):
     user = require_login(request)
     if not isinstance(user, dict):
         raise HTTPException(status_code=401, detail="未登录")
     if part_index < 1 or part_index > 9999:
         raise HTTPException(status_code=404, detail="分卷不存在")
     job_dir = _vulnerability_job_dir(job_id)
-    candidates = sorted((job_dir / "archives").glob(f"*.csv.gz.{part_index:03d}"))
+    from ..services.vulnerability_archive_jobs import archive_directory
+
+    normalized_format = "zip_lzma" if archive_format == "zip_lzma" else ("csv_gzip" if archive_format == "csv_gzip" else "zip")
+    configured_dir = archive_directory(job_dir / "archives", part_size_mb, normalized_format)
+    candidates = sorted(configured_dir.glob(f"*.csv.gz.{part_index:03d}"))
     if not candidates:
-        candidates = sorted((job_dir / "archives").glob(f"*.zip.{part_index:03d}"))
+        candidates = sorted(configured_dir.glob(f"*.zip.{part_index:03d}"))
+    if not candidates:
+        candidates = sorted((job_dir / "archives").glob(f"**/*.csv.gz.{part_index:03d}"))
+    if not candidates:
+        candidates = sorted((job_dir / "archives").glob(f"**/*.zip.{part_index:03d}"))
     if not candidates:
         raise HTTPException(status_code=404, detail="分卷不存在，请先生成压缩分卷")
     part_path = candidates[0]
@@ -1578,20 +1616,24 @@ async def api_send_vulnerability_email(request: Request, job_id: str, body: Vuln
     if not output_path.exists() or not manifest_path.exists():
         raise HTTPException(status_code=404, detail="结果不存在或已清理")
 
-    from ..services.vulnerability_archive import create_split_archive, normalize_part_size_mb
+    from ..services.vulnerability_archive_jobs import archive_directory, archive_status
     from ..services.email_service import send_email
 
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         archive_stem = Path(str(manifest.get("download_name") or "比亚迪项目主机安全体检报告.xlsx")).stem
-        parts = await run_in_threadpool(
-            create_split_archive,
+        normalized_format = "zip_lzma" if body.archive_format == "zip_lzma" else ("csv_gzip" if body.archive_format == "csv_gzip" else "zip")
+        archive_dir = archive_directory(job_dir / "archives", body.part_size_mb, normalized_format)
+        archive_result = archive_status(
+            job_id,
             output_path,
-            job_dir / "archives",
-            archive_stem,
-            part_size_mb=normalize_part_size_mb(body.part_size_mb),
-            archive_format="zip_lzma" if body.archive_format == "zip_lzma" else ("csv_gzip" if body.archive_format == "csv_gzip" else "zip"),
+            archive_dir,
+            part_size_mb=body.part_size_mb,
+            archive_format=normalized_format,
         )
+        if archive_result.get("status") != "completed":
+            raise ValueError("压缩分卷尚未完成，请先等待压缩任务完成")
+        parts = archive_result["parts"]
         email_settings = db.get_email_settings() or {}
         if not email_settings.get("smtp_host"):
             raise ValueError("邮件服务未配置，请先在系统设置中配置SMTP")
@@ -1619,7 +1661,7 @@ async def api_send_vulnerability_email(request: Request, job_id: str, body: Vuln
                     else f"<p>漏洞主机报告已生成，本邮件为第 {part['index']} / {len(parts)} 个压缩分卷。</p><p>请下载全部分卷后按压缩包内说明合并解压。</p>"
                 ),
                 cc_list,
-                [{"filename": str(part["name"]), "path": Path(str(part["path"]))}],
+                [{"filename": str(part["name"]), "path": archive_dir / str(part["name"])}],
                 email_settings,
             )
             if not result.get("success"):
