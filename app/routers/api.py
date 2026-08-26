@@ -42,6 +42,7 @@ class VulnerabilityEmailRequest(BaseModel):
     to_list: list[str] = []
     cc_list: list[str] = []
     part_size_mb: int = 15
+    archive_format: str = "csv_gzip"
 
 
 @router.post("/login")
@@ -1498,7 +1499,12 @@ async def api_delete_vulnerability_history(request: Request, job_id: str):
 
 
 @router.post("/tools/vulnerability-process/{job_id}/archive")
-async def api_archive_vulnerability_result(request: Request, job_id: str, part_size_mb: int = Form(15)):
+async def api_archive_vulnerability_result(
+    request: Request,
+    job_id: str,
+    part_size_mb: int = Form(15),
+    archive_format: str = Form("csv_gzip"),
+):
     user = require_login(request)
     if not isinstance(user, dict):
         raise HTTPException(status_code=401, detail="未登录")
@@ -1521,6 +1527,7 @@ async def api_archive_vulnerability_result(request: Request, job_id: str, part_s
             job_dir / "archives",
             archive_stem,
             part_size_mb=normalize_part_size_mb(part_size_mb),
+            archive_format="csv_gzip" if archive_format == "csv_gzip" else "zip",
         )
     except Exception as error:
         raise HTTPException(status_code=500, detail=f"压缩分卷失败：{error}") from error
@@ -1547,7 +1554,9 @@ async def api_download_vulnerability_archive_part(request: Request, job_id: str,
     if part_index < 1 or part_index > 9999:
         raise HTTPException(status_code=404, detail="分卷不存在")
     job_dir = _vulnerability_job_dir(job_id)
-    candidates = sorted((job_dir / "archives").glob(f"*.zip.{part_index:03d}"))
+    candidates = sorted((job_dir / "archives").glob(f"*.csv.gz.{part_index:03d}"))
+    if not candidates:
+        candidates = sorted((job_dir / "archives").glob(f"*.zip.{part_index:03d}"))
     if not candidates:
         raise HTTPException(status_code=404, detail="分卷不存在，请先生成压缩分卷")
     part_path = candidates[0]
@@ -1581,6 +1590,7 @@ async def api_send_vulnerability_email(request: Request, job_id: str, body: Vuln
             job_dir / "archives",
             archive_stem,
             part_size_mb=normalize_part_size_mb(body.part_size_mb),
+            archive_format="csv_gzip" if body.archive_format == "csv_gzip" else "zip",
         )
         email_settings = db.get_email_settings() or {}
         if not email_settings.get("smtp_host"):
@@ -1602,7 +1612,12 @@ async def api_send_vulnerability_email(request: Request, job_id: str, body: Vuln
                 send_email,
                 to_list,
                 subject,
-                f"<p>漏洞主机报告已生成，本邮件为第 {part['index']} / {len(parts)} 个压缩分卷。</p><p>请下载全部分卷后按压缩包内说明合并解压。</p>",
+                (
+                    f"<p>漏洞主机报告已生成，本邮件为第 {part['index']} / {len(parts)} 个 CSV.GZIP 分卷。</p>"
+                    "<p>请下载全部分卷后按编号顺序合并，再使用 GZIP 工具解压 CSV 文件。</p>"
+                    if body.archive_format == "csv_gzip"
+                    else f"<p>漏洞主机报告已生成，本邮件为第 {part['index']} / {len(parts)} 个压缩分卷。</p><p>请下载全部分卷后按压缩包内说明合并解压。</p>"
+                ),
                 cc_list,
                 [{"filename": str(part["name"]), "path": Path(str(part["path"]))}],
                 email_settings,
