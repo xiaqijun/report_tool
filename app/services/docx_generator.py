@@ -14,6 +14,26 @@ from app.config import EXPORT_DIR
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 DAILY_REPORT_TEMPLATE = BASE_DIR / "app" / "static" / "report-templates" / "daily-report-template.docx"
 
+# The template keeps the image frames and captions in place.  These media parts
+# are the product screenshots, so they must be replaced for every report rather
+# than copied from whatever report was used to create the template.
+_TEMPLATE_SCREENSHOT_MEDIA = {
+    "word/media/image2.png": ("waf_screenshot_path", "rId9"),
+    "word/media/image3.png": ("waf_qps_screenshot_path", "rId10"),
+    "word/media/image4.png": ("cfw_screenshot_path", "rId11"),
+    "word/media/image5.png": ("cfw_bandwidth_screenshot_path", "rId12"),
+    "word/media/image6.png": ("hss_screenshot_path", "rId13"),
+    "word/media/image7.png": ("ddos_screenshot_path", "rId14"),
+    "word/media/image8.png": ("secmaster_screenshot_path", "rId15"),
+}
+
+# A transparent pixel preserves the template's image frame and caption while
+# preventing a stale screenshot from appearing when a section has no upload.
+_TRANSPARENT_PNG = bytes.fromhex(
+    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"
+    "0000000d49444154789c6360000000020001e221bc330000000049454e44ae426082"
+)
+
 
 def generate_daily_report_docx(report: dict, operators: list[dict]) -> Path:
     if not DAILY_REPORT_TEMPLATE.exists():
@@ -21,7 +41,12 @@ def generate_daily_report_docx(report: dict, operators: list[dict]) -> Path:
     export_dir = EXPORT_DIR / "daily"
     export_dir.mkdir(parents=True, exist_ok=True)
     file_path = export_dir / _build_report_filename(str(report.get("report_date", "")))
-    _render_docx_template(DAILY_REPORT_TEMPLATE, file_path, _build_template_context(report, operators))
+    context = _build_template_context(report, operators)
+    context["_screenshot_paths"] = {
+        field_name: report.get(field_name, "")
+        for field_name, _relationship_id in _TEMPLATE_SCREENSHOT_MEDIA.values()
+    }
+    _render_docx_template(DAILY_REPORT_TEMPLATE, file_path, context)
     return file_path
 
 
@@ -31,15 +56,37 @@ def _render_docx_template(template_path: Path, output_path: Path, context: dict[
         for key, value in context.items()
     }
     report_title = escape(str(context.get("report_title") or ""))
+    screenshot_paths = context.get("_screenshot_paths")
+    if not isinstance(screenshot_paths, dict):
+        screenshot_paths = {}
+    screenshot_media: dict[str, bytes] = {}
+    screenshot_content_types: dict[str, str] = {}
+    for media_name, (field_name, _relationship_id) in _TEMPLATE_SCREENSHOT_MEDIA.items():
+        screenshot_path = _resolve_report_asset(screenshot_paths.get(field_name, ""))
+        if screenshot_path is None:
+            screenshot_media[media_name] = _TRANSPARENT_PNG
+            continue
+        suffix = screenshot_path.suffix.lower()
+        if suffix not in {".png", ".jpg", ".jpeg"}:
+            screenshot_media[media_name] = _TRANSPARENT_PNG
+            continue
+        screenshot_media[media_name] = screenshot_path.read_bytes()
+        screenshot_content_types[media_name] = {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+        }[suffix]
 
     xml_files = {"word/document.xml", "word/header1.xml", "word/header2.xml", "word/header3.xml",
                  "word/footer1.xml", "word/footer2.xml", "word/footer3.xml",
-                 "docProps/core.xml", "docProps/app.xml"}
+                 "docProps/core.xml", "docProps/app.xml", "[Content_Types].xml"}
 
     with ZipFile(template_path, "r") as source_zip, ZipFile(output_path, "w", compression=ZIP_DEFLATED) as target_zip:
         for info in source_zip.infolist():
             data = source_zip.read(info.filename)
             fname = info.filename.replace("\\", "/")
+            if fname in screenshot_media:
+                data = screenshot_media[fname]
             if fname in xml_files or fname.startswith("word/header") or fname.startswith("word/footer") or fname.startswith("docProps/"):
                 xml_text = data.decode("utf-8", errors="replace")
                 if fname == "word/document.xml":
@@ -48,8 +95,24 @@ def _render_docx_template(template_path: Path, output_path: Path, context: dict[
                     xml_text = xml_text.replace(placeholder, value)
                 if report_title:
                     xml_text = _replace_report_title(xml_text, report_title)
+                if fname == "[Content_Types].xml":
+                    xml_text = _apply_screenshot_content_types(xml_text, screenshot_content_types)
                 data = xml_text.encode("utf-8")
             target_zip.writestr(info, data)
+
+
+def _apply_screenshot_content_types(xml_text: str, content_types: dict[str, str]) -> str:
+    for media_name, content_type in content_types.items():
+        part_name = "/" + media_name
+        override = f'<Override PartName="{part_name}" ContentType="{content_type}"/>'
+        pattern = re.compile(
+            rf'<Override PartName="{re.escape(part_name)}" ContentType="[^"]*"/>'
+        )
+        if pattern.search(xml_text):
+            xml_text = pattern.sub(override, xml_text)
+        else:
+            xml_text = xml_text.replace("</Types>", f"{override}</Types>")
+    return xml_text
 
 
 def _expand_operator_rows(xml_text: str, operator_count: int) -> str:
